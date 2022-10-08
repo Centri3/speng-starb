@@ -1,8 +1,3 @@
-#![cfg_attr(
-    all(target_os = "windows", not(debug_assertions)),
-    windows_subsystem = "windows"
-)]
-
 use crate::handler::{self, CompactPatch, EsiFilter, Handler, NoMaxSearchRadius, Reason};
 use eframe::{glow, App, Frame};
 use egui::{Align, CentralPanel, Direction, Layout, Slider, TopBottomPanel};

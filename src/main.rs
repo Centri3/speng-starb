@@ -1,5 +1,10 @@
 // Please don't judge me for my spaghetti code here please I'm rushing this out really hard and this project shouldn't be taken too seriously anyway (it'll be made obsolete soon™️)
 
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 use app::StarApp;
 use eframe::NativeOptions;
 
