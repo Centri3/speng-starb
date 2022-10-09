@@ -1,6 +1,6 @@
 # speng-starb (Star Browser Utilities)
 
-A program to provide QOL patches for the Star browser in [SpaceEngine](https://spaceengine.org/). This is unfinished, so make sure to [suggest new patches*](https://github.com/Centri3/speng-elf/issues)! (or create [pull requests](https://github.com/Centri3/speng-elf/pulls) to fix my spaghetti code!)
+A program to provide QOL patches for the Star browser in [SpaceEngine](https://spaceengine.org/). This is unfinished, so make sure to [suggest new patches*](https://github.com/Centri3/speng-starb/issues)! (or create [pull requests](https://github.com/Centri3/speng-starb/pulls) to fix my spaghetti code!)
 
 ***Which can be realistically added!**
 
