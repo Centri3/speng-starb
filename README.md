@@ -38,7 +38,7 @@ A program to provide QOL patches for the Star browser in [SpaceEngine](https://s
 
 - Adds chthonia as a bulk-class filter. The chthonia bulk-class was
 meant to be removed long ago, but due to some bug,any gas giant
-with >25% helium in its composition is a chthonia. This lets you
+with >25% gasses with the dominant element being helium in its composition is a chthonia. This lets you
 search for them again, which you haven't been able to since
 0.990.35 (in vanilla, anyway)
 </details>
