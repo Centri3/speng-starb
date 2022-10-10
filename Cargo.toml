@@ -1,6 +1,6 @@
 [package]
 name = "speng-starb"
-version = "3.0.0-patch.1"
+version = "3.0.1"
 edition = "2021"
 description = "A program to provide QOL patches for the Star browser in SpaceEngine"
 license = "MIT OR Apache-2.0"

@@ -16,9 +16,6 @@ const VERSION_DATA: [u8; 64usize] = [
     0x7fu8, 0x44u8, 0x24u8, 0x30u8,
 ];
 
-pub const NO_MAX_SEARCH_RADIUS_DATA: (usize, [u8; 1usize], [u8; 1usize]) =
-    (0x3e990e, [0xeb], [0x74]);
-
 // I have to use the same number of bytes for each opcode because of spaghetti. I hate this
 pub const NO_SEARCH_LOCKING_DATA: [(usize, [u8; 15usize], [u8; 15usize]); 3usize] = [
     (
@@ -55,6 +52,12 @@ pub const NO_SEARCH_LOCKING_DATA: [(usize, [u8; 15usize], [u8; 15usize]); 3usize
         ],
     ),
 ];
+
+pub const CHTHONIA_FILTER_DATA: (usize, [u8; 7usize], [u8; 7usize]) = (
+    0x3e8d49usize,
+    [0xb8u8, 0x07u8, 0x00u8, 0x00u8, 0x00u8, 0x66u8, 0x90u8],
+    [0x41u8, 0x8bu8, 0x41u8, 0x08u8, 0x4du8, 0x8bu8, 0xd1u8],
+);
 
 pub const ACCURATE_TEMP_FILTER_DATA: (usize, [u8; 1usize], [u8; 1usize]) =
     (0x3e8e4busize, [0x48u8], [0x4cu8]);
@@ -267,7 +270,7 @@ impl NoMaxSearchRadius {
                     mem::size_of_val(&Self::NMSR_DATA_NEW[1usize].2),
                     None,
                 );
-            }
+            },
             false => unsafe {
                 let mut old_protection = Memory::PAGE_PROTECTION_FLAGS(0u32);
 
@@ -472,6 +475,7 @@ pub enum Reason {
     NotFound,
     FailedToOpen,
     WrongVersion,
+    TooManyInstances,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -486,6 +490,13 @@ impl Handler {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
+
+        if sys.processes_by_exact_name("speng-starb.exe").count() > 1usize {
+            return Self {
+                reason: Some(Reason::TooManyInstances),
+                ..Default::default()
+            }
+        }
 
         let pid = match sys.processes_by_exact_name("SpaceEngine.exe").nth(0usize) {
             Some(ph) => ph.pid().as_u32(),

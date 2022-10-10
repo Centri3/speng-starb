@@ -1,28 +1,22 @@
 use crate::handler::{self, CompactPatch, EsiFilter, Handler, NoMaxSearchRadius, Reason};
 use eframe::{glow, App, Frame};
-use egui::{Align, CentralPanel, Direction, Layout, Slider, TopBottomPanel};
+use egui::{Align, CentralPanel, Direction, Layout, Slider, TopBottomPanel, Window};
 
 pub struct StarApp {
     pub handler: Handler,
-    pub no_max_search_radius: (NoMaxSearchRadius, bool),
+    pub no_max_search_radius: (Option<NoMaxSearchRadius>, bool),
     pub no_max_search_radius_settings: (bool, bool, f32),
-    pub no_search_locking: (CompactPatch, bool),
-    pub accurate_temp_filter: (CompactPatch, bool),
-    pub esi_filter: (EsiFilter, bool),
+    pub no_search_locking: (Option<CompactPatch>, bool),
+    pub accurate_temp_filter: (Option<CompactPatch>, bool),
+    pub esi_filter: (Option<EsiFilter>, bool),
     pub esi_filter_settings: (f32, f32),
+    pub chthonia_filter: (Option<CompactPatch>, bool),
     pub allowed_to_close: bool,
     pub show_confirmation_dialog: bool,
-    pub age: u32,
 }
 
 impl StarApp {
     pub fn new() -> Self {
-        let no_max_search_radius_data = vec![(
-            handler::NO_MAX_SEARCH_RADIUS_DATA.0,
-            handler::NO_MAX_SEARCH_RADIUS_DATA.1.to_vec(),
-            handler::NO_MAX_SEARCH_RADIUS_DATA.2.to_vec(),
-        )];
-
         let no_search_locking_data = handler::NO_SEARCH_LOCKING_DATA.to_vec();
         let no_search_locking_data = vec![
             (
@@ -48,19 +42,39 @@ impl StarApp {
             handler::ACCURATE_TEMP_FILTER_DATA.2.to_vec(),
         )];
 
+        let chthonia_filter = vec![(
+            handler::CHTHONIA_FILTER_DATA.0,
+            handler::CHTHONIA_FILTER_DATA.1.to_vec(),
+            handler::CHTHONIA_FILTER_DATA.2.to_vec(),
+        )];
+
         let handler = Handler::new();
 
-        StarApp {
-            handler,
-            no_max_search_radius: (NoMaxSearchRadius {}, false),
-            no_max_search_radius_settings: (false, false, 0.0f32),
-            no_search_locking: (CompactPatch::new(no_search_locking_data), false),
-            accurate_temp_filter: (CompactPatch::new(accurate_temp_filter_data), false),
-            esi_filter: (EsiFilter::new(&handler.clone()), false),
-            esi_filter_settings: (0.990f32, 1.0f32),
-            allowed_to_close: false,
-            show_confirmation_dialog: false,
-            age: 0u32,
+        match handler.reason.is_none() {
+            true => StarApp {
+                handler,
+                no_max_search_radius: (Some(NoMaxSearchRadius {}), false),
+                no_max_search_radius_settings: (false, false, 0.0f32),
+                no_search_locking: (Some(CompactPatch::new(no_search_locking_data)), false),
+                accurate_temp_filter: (Some(CompactPatch::new(accurate_temp_filter_data)), false),
+                esi_filter: (Some(EsiFilter::new(&handler.clone())), false),
+                esi_filter_settings: (0.990f32, 1.0f32),
+                chthonia_filter: (Some(CompactPatch::new(chthonia_filter)), false),
+                allowed_to_close: false,
+                show_confirmation_dialog: false,
+            },
+            false => StarApp {
+                handler,
+                no_max_search_radius: (None, false),
+                no_max_search_radius_settings: (false, false, 0.0f32),
+                no_search_locking: (None, false),
+                accurate_temp_filter: (None, false),
+                esi_filter: (None, false),
+                esi_filter_settings: (0.990f32, 0.10f32),
+                chthonia_filter: (None, false),
+                allowed_to_close: false,
+                show_confirmation_dialog: false,
+            },
         }
     }
 }
@@ -104,10 +118,14 @@ impl App for StarApp {
                         true => self
                             .no_max_search_radius
                             .0
+                            .as_ref()
+                            .unwrap()
                             .enable(self.no_max_search_radius_settings, &self.handler),
                         false => self
                             .no_max_search_radius
                             .0
+                            .as_ref()
+                            .unwrap()
                             .disable(self.no_max_search_radius_settings, &self.handler),
                     }
 
@@ -155,8 +173,18 @@ impl App for StarApp {
                         .clicked()
                     {
                         match self.no_search_locking.1 {
-                            true => self.no_search_locking.0.enable(&self.handler),
-                            false => self.no_search_locking.0.disable(&self.handler),
+                            true => self
+                                .no_search_locking
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .enable(&self.handler),
+                            false => self
+                                .no_search_locking
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .disable(&self.handler),
                         }
                     }
 
@@ -177,8 +205,18 @@ impl App for StarApp {
                         .clicked()
                     {
                         match self.accurate_temp_filter.1 {
-                            true => self.accurate_temp_filter.0.enable(&self.handler),
-                            false => self.accurate_temp_filter.0.disable(&self.handler),
+                            true => self
+                                .accurate_temp_filter
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .enable(&self.handler),
+                            false => self
+                                .accurate_temp_filter
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .disable(&self.handler),
                         }
                     }
 
@@ -211,14 +249,45 @@ impl App for StarApp {
                         true => self
                             .esi_filter
                             .0
+                            .as_ref()
+                            .unwrap()
                             .enable(self.esi_filter_settings, &self.handler),
-                        false => self.esi_filter.0.disable(&self.handler),
+                        false => self.esi_filter.0.as_ref().unwrap().disable(&self.handler),
+                    }
+
+                    ui.separator();
+
+                    if ui
+                        .checkbox(&mut self.chthonia_filter.1, "Chthonia Filter")
+                        .on_hover_text(
+                            "Adds chthonia as a bulk-class filter. The chthonia bulk-class was \
+                             meant to be\nremoved long ago, but due to some bug,any gas giant \
+                             with >25% helium in\nits composition is a chthonia. This lets you \
+                             search for them again, which you haven't\nbeen able to since \
+                             0.990.35 (in vanilla, anyway)",
+                        )
+                        .clicked()
+                    {
+                        match self.chthonia_filter.1 {
+                            true => self
+                                .chthonia_filter
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .enable(&self.handler),
+                            false => self
+                                .chthonia_filter
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .disable(&self.handler),
+                        }
                     }
                 });
             });
         } else {
             match self.handler.reason.as_ref() {
-                Some(Reason::NotFound) => egui::Window::new("Failed to find SE!")
+                Some(Reason::NotFound) => Window::new("Failed to find SE!")
                     .collapsible(false)
                     .resizable(false)
                     .show(ctx, |ui| {
@@ -227,7 +296,7 @@ impl App for StarApp {
                              program once you open it.",
                         ));
                     }),
-                Some(Reason::FailedToOpen) => egui::Window::new("Failed to open a handle to SE!")
+                Some(Reason::FailedToOpen) => Window::new("Failed to open a handle to SE!")
                     .collapsible(false)
                     .resizable(false)
                     .show(ctx, |ui| {
@@ -237,7 +306,7 @@ impl App for StarApp {
                              this.",
                         ));
                     }),
-                Some(Reason::WrongVersion) => egui::Window::new("Wrong Version!")
+                Some(Reason::WrongVersion) => Window::new("Wrong Version!")
                     .collapsible(false)
                     .resizable(false)
                     .show(ctx, |ui| {
@@ -246,7 +315,16 @@ impl App for StarApp {
                              CurrentBeta.",
                         ));
                     }),
-                None => egui::Window::new("SE Closed!")
+                Some(Reason::TooManyInstances) => Window::new("Too Many Instances!")
+                    .collapsible(false)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.label(format!(
+                            "You already have another instance of this program open! Please close \
+                             the other instance.",
+                        ));
+                    }),
+                None => Window::new("SE Closed!")
                     .collapsible(false)
                     .resizable(false)
                     .show(ctx, |ui| {
@@ -292,13 +370,28 @@ impl App for StarApp {
         // Cleaning up once we're done
         self.no_max_search_radius
             .0
+            .as_ref()
+            .unwrap()
             .disable(self.no_max_search_radius_settings, &self.handler);
-        self.no_search_locking.0.disable(&self.handler);
-        self.accurate_temp_filter.0.disable(&self.handler);
-        self.esi_filter.0.disable(&self.handler);
-        self.esi_filter.0.close(&self.handler);
+        self.no_search_locking
+            .0
+            .as_ref()
+            .unwrap()
+            .disable(&self.handler);
+        self.accurate_temp_filter
+            .0
+            .as_ref()
+            .unwrap()
+            .disable(&self.handler);
+        self.esi_filter.0.as_ref().unwrap().disable(&self.handler);
+        self.chthonia_filter
+            .0
+            .as_ref()
+            .unwrap()
+            .disable(&self.handler);
 
-        // Close the handle. No clue what happens if I don't do this but no reason why I shouldn't (even if it crashes, it's already closing!)
+        // Close handles. No clue what happens if I don't do this but no reason why I shouldn't (even if it crashes, it's already closing!)
+        self.esi_filter.0.as_ref().unwrap().close(&self.handler);
         self.handler.close();
     }
 }

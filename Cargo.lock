@@ -2146,7 +2146,7 @@ dependencies = [
 
 [[package]]
 name = "speng-starb"
-version = "3.0.0-patch.1"
+version = "3.0.1"
 dependencies = [
  "eframe",
  "egui",
