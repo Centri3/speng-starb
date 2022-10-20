@@ -1,23 +1,50 @@
-// Please don't judge me for my spaghetti code here please I'm rushing this out really hard and this project shouldn't be taken too seriously anyway (it'll be made obsolete soon™️)
-
 #![cfg_attr(
-    all(target_os = "windows", not(debug_assertions)),
+    all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
 
-use app::StarApp;
-use eframe::NativeOptions;
-
 mod app;
 mod handler;
+mod patches;
+
+use crate::app::StarbApp;
+use eframe::NativeOptions;
+use patches::Patch;
+use sysinfo::{System, SystemExt};
+
+#[derive(Debug, serde::Deserialize)]
+struct Config {
+    a: String,
+    b: Patches,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Patches {
+    b: String,
+}
 
 fn main() {
-    // This line cost me an hour of debugging. Yep, an hour. I had just forgotten to remove this line...
-    // handler::EsiFilter::new(&handler::Handler::new());
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    eframe::run_native(
-        format!("{}-{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")).as_str(),
-        NativeOptions::default(),
-        Box::new(|_| Box::new(StarApp::new())),
-    );
+    let x: crate::patches::compact::Compact = toml::from_slice(include_bytes!("patches/data/no_search_locking.toml")).unwrap();
+    x.toggle();
+
+    //
+    //
+    // let handler = crate::handler::Handler::new(&mut sys);
+    //
+    // eframe::run_native(
+    //     format!(
+    //         "Star Browser Utilities ({} {})",
+    //         env!("CARGO_PKG_NAME"),
+    //         env!("CARGO_PKG_VERSION"),
+    //     )
+    //     .as_str(),
+    //     NativeOptions {
+    //         drag_and_drop_support: false,
+    //         ..Default::default()
+    //     },
+    //     Box::new(|cc| Box::new(StarbApp::new(cc))),
+    // );
 }
