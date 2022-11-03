@@ -1,0 +1,17 @@
+[package]
+name = "starb"
+version = "3.1.0"
+edition = "2021"
+description = "A patcher to provide optional features, bugfixes and QOL changes for the Star browser in SpaceEngine"
+license = "MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eframe = { version = "0.19.0", features = ["persistence"] }
+egui = { version = "0.19.0", features = ["extra_debug_asserts", "serde"] }
+serde = { version = "1.0.145", features = ["derive"] }
+starb-derive = { path = "../starb-derive" }
+starb-handler = { path = "../starb-handler" }
+sysinfo = "0.26.7"
+toml = "0.5.9"

@@ -1,0 +1,12 @@
+[general]
+name = "Accurate Temperature Filter"
+description = ""
+category = "bugfix"
+
+[start]
+opcodes = []
+
+[update]
+opcodes = [
+    { addr = 0, on = [0x48], off = [0x4c] },
+]

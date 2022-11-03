@@ -1,24 +1,6 @@
-[package]
-name = "speng-starb"
-version = "3.1.0"
-edition = "2021"
-description = "A program to provide QOL patches for the Star browser in SpaceEngine"
-license = "MIT OR Apache-2.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-eframe = { version = "0.19.0", features = ["persistence"] }
-egui = { version = "0.19.0", features = ["extra_debug_asserts", "serde"] }
-serde = { version = "1.0.145", features = ["derive"] }
-toml = "0.5.9"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-sysinfo = "0.26.4"
-windows = { version = "0.42.0", features = [
-    "Win32_Foundation",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_Memory",
-    "Win32_System_ProcessStatus",
-    "Win32_System_Threading",
-] }
+[workspace]
+members = [
+    "crates/starb",
+    "crates/starb-derive",
+    "crates/starb-handler",
+]
