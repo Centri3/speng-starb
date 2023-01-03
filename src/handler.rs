@@ -565,12 +565,12 @@ impl Handler {
             buffer == VERSION_DATA
         };
 
-        // if !version {
-        //     return Self {
-        //         reason: Some(Reason::WrongVersion),
-        //         ..Default::default()
-        //     };
-        // }
+        if !version {
+            return Self {
+                reason: Some(Reason::WrongVersion),
+                ..Default::default()
+            };
+        }
 
         Self {
             reason: None,
