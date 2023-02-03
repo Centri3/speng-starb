@@ -1,6 +1,15 @@
 [workspace]
 members = [
     "crates/starb",
-    "crates/starb-derive",
-    "crates/starb-handler",
+    "crates/starb-app",
+    "crates/starb-config",
+    "crates/starb-logging",
 ]
+
+# This is seemingly necessary for egui to build. Shiver me timbers
+[profile.dev.package."*"]
+opt-level = 2
+
+# Better performance with color-eyre
+[profile.dev.package.backtrace]
+opt-level = 3

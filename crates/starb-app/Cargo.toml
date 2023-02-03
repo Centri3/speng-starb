@@ -1,0 +1,8 @@
+[package]
+name = "starb-app"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+egui = { version = "0.20.1", features = ["extra_debug_asserts"] }
+eframe = "0.20.1"
