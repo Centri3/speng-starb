@@ -4,9 +4,15 @@ version = "3.1.0"
 edition = "2021"
 
 [dependencies]
-egui = { version = "0.20.1", features = ["extra_debug_asserts"] }
-eframe = "0.20.1"
-starb-app = { path = "../starb-app" }
+bytemuck = { version = "1.13.0", features = ["min_const_generics"] }
 starb-config = { path = "../starb-config" }
 starb-logging = { path = "../starb-logging" }
 tracing = "0.1.37"
+widestring = "1.0.2"
+windows = { version = "0.44.0", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }

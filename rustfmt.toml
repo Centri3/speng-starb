@@ -2,5 +2,5 @@
 format_strings = true
 
 # Preference
-imports_granularity = "One"
+imports_granularity = "Item"
 wrap_comments = true

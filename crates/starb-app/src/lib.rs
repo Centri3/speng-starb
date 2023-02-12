@@ -1,12 +1,14 @@
-//! UI for Star Browser Utilities
+pub fn add(left: usize, right: usize) -> usize {
+    left + right
+}
 
-use eframe::App;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[derive(Debug)]
-pub struct StarbApp {}
-
-impl App for StarbApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        todo!()
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
     }
 }
