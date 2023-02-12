@@ -65,7 +65,7 @@ fn main() {
                     let address = import[0usize] as usize + 0x2;
                     let mut name = String::new();
                         for offset in address.. {
-                            // FIXME: FUCK
+                            // FIXME: 😳
                             let byte = read::<u8>(&bytes, offset - 0xC00);
 
                             if byte == 0u8 {
