@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/starb",
+    "crates/starb-logging",
 ]
 
 # This is seemingly necessary for egui to build. Shiver me timbers

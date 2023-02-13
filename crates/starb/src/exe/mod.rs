@@ -1,6 +1,7 @@
 pub mod headers;
 
 use self::headers::PeHeaders;
+use crate::exe::headers::PeImageSection;
 use bytemuck::Pod;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
@@ -41,12 +42,12 @@ impl Exe {
         // Check whether the selected file is below 8MB in size, if it is, we print to
         // log. This won't prevent selecting anything other than `SpaceEngine.exe`
         // though it will show what the user did wrong!
-        if inner.len() < 80000000usize {
+        if inner.len() < 8_000_000usize {
             warn!(
                 ?path,
                 size = inner.len(),
                 "Selected file is below 8MB in size"
-            )
+            );
         }
 
         self.inner
@@ -91,35 +92,34 @@ impl Exe {
     where
         R: fmt::Debug + SliceIndex<[u8], Output = [u8]>,
     {
-        self.get_read().get(range).map(|s| s.to_vec())
+        self.get_read().get(range).map(<[u8]>::to_vec)
     }
 
     #[must_use]
     #[inline]
     #[instrument]
     pub fn read_to<P: Pod>(&self, index: usize) -> Option<P> {
-        self.get_read()
-            .get(index..index + mem::size_of::<P>())
-            .map(|s| *bytemuck::from_bytes(s))
+        let range = index..(index + mem::size_of::<P>());
+
+        self.get_read().get(range).map(|s| *bytemuck::from_bytes(s))
     }
 
     #[must_use]
     #[inline]
     #[instrument]
     pub fn write(&self, index: usize, value: u8) {
-        self.get_write()[index] = value
+        // This will panic if it's out of bounds!
+        self.get_write()[index] = value;
     }
 
-    // TODO: I should refactor this, it's ugly
     #[inline]
     #[instrument]
-    pub fn write_many<P: fmt::Debug + Pod>(&self, index: usize, value: P) {
+    pub fn write_many(&self, index: usize, value: &[u8]) {
         let mut writer = self.get_write();
-        let bytes = bytemuck::bytes_of(&value);
 
-        for byte in bytes.iter().enumerate() {
+        for (i, byte) in value.iter().enumerate() {
             // This will panic if it's out of bounds!
-            writer[index + byte.0] = *byte.1;
+            writer[i] = *byte;
         }
     }
 
@@ -129,6 +129,7 @@ impl Exe {
         let mut writer = self.get_write();
 
         for (i, byte) in bytemuck::bytes_of(&value).iter().enumerate() {
+            // This will panic if it's out of bounds!
             writer[i] = *byte;
         }
     }
@@ -141,14 +142,47 @@ impl Exe {
         Ok(())
     }
 
+    // TODO: Ok, this is ugly as fuck. Refactor please
     #[must_use]
     #[inline]
     #[instrument]
     pub fn headers(&self) -> PeHeaders {
-        // Offsets from 0x170 where this data lies. Easier to read when given names
-        const ENTRY_POINT: usize = 0x28usize;
-        const SECTIONS: usize = 0x108usize;
+        // TODO: Verify these offsets are always correct
+        const ENTRY_POINT: usize = 0x198usize;
+        const SECTIONS: usize = 0x278usize;
 
-        todo!();
+        // Make sure the region for headers exists. If it doesn't, troll the user back
+        self.read_many(..0x400)
+            .expect("<https://tenor.com/view/hog-boar-emoji-mindblown-mind-blown-slideshow-meme-gif-26390794>");
+
+        let mut sections = vec![];
+
+        for i in 0usize.. {
+            // Base address of section
+            let base = SECTIONS + i * 0x28usize;
+
+            let name = String::from_utf8(self.read_to::<u64>(base).unwrap().to_le_bytes().to_vec())
+                .unwrap_or_else(|p| {
+                    panic!("Section {i:x}'s name at {base:x}: {p}")
+                })
+                .replace('\0', "");
+
+            if name.is_empty() {
+                break;
+            }
+
+            let start = self.read_to::<u32>(base + 0x14usize).unwrap() as usize;
+            let end = start + self.read_to::<u32>(base + 0x10usize).unwrap() as usize;
+
+            sections.push(PeImageSection {
+                name,
+                section: start..end,
+            })
+        }
+
+        PeHeaders {
+            entry_point: self.read_to::<u32>(ENTRY_POINT).unwrap() as usize,
+            sections,
+        }
     }
 }

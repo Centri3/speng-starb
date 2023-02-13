@@ -11,6 +11,9 @@ compile_error!("`Star Browser Utilities` should only be compiled on `Windows`");
 
 fn main() {
     EXE.init("SpaceEngine.exe").unwrap();
-    EXE.headers();
+
+    use std::io::Write;
+    let mut lol = std::fs::File::create("headers.txt").unwrap();
+    writeln!(lol, "{:#x?}", EXE.headers()).unwrap();
     // EXE.save("SpaceEngine.exe").unwrap();
 }

@@ -4,13 +4,13 @@ use std::ops::Range;
 #[non_exhaustive]
 pub struct PeHeaders {
     // TODO: This is missing a lot, though the rest is never used
-    entry_point: usize,
-    sections: Vec<PeImageSection>,
+    pub entry_point: usize,
+    pub sections: Vec<PeImageSection>,
 }
 
 #[derive(Clone, Debug)]
-struct PeImageSection {
+pub struct PeImageSection {
     // TODO: Same here
-    name: &'static str,
-    section: Range<usize>,
+    pub name: String,
+    pub section: Range<usize>,
 }
