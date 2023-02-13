@@ -1,7 +1,11 @@
 #[macro_use]
 extern crate tracing;
 
+mod exe;
+
+use crate::exe::EXE;
 use bytemuck::Pod;
+use parking_lot::RwLock;
 use std::fs;
 use std::io::Write;
 use windows::w;
