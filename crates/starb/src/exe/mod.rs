@@ -11,6 +11,7 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
+use std::mem;
 use std::path::Path;
 use std::slice::SliceIndex;
 
@@ -96,20 +97,39 @@ impl Exe {
     #[must_use]
     #[inline]
     #[instrument]
+    pub fn read_to<P: Pod>(&self, index: usize) -> Option<P> {
+        self.get_read()
+            .get(index..index + mem::size_of::<P>())
+            .map(|s| *bytemuck::from_bytes(s))
+    }
+
+    #[must_use]
+    #[inline]
+    #[instrument]
     pub fn write(&self, index: usize, value: u8) {
         self.get_write()[index] = value
     }
 
-    // TODO(Centri3): I should refactor this, it's ugly
+    // TODO: I should refactor this, it's ugly
     #[inline]
     #[instrument]
-    pub fn write_many<T: fmt::Debug + Pod>(&self, index: usize, value: T) {
+    pub fn write_many<P: fmt::Debug + Pod>(&self, index: usize, value: P) {
         let mut writer = self.get_write();
         let bytes = bytemuck::bytes_of(&value);
 
         for byte in bytes.iter().enumerate() {
             // This will panic if it's out of bounds!
             writer[index + byte.0] = *byte.1;
+        }
+    }
+
+    #[inline]
+    #[instrument]
+    pub fn write_to<P: fmt::Debug + Pod>(&self, index: usize, value: P) {
+        let mut writer = self.get_write();
+
+        for (i, byte) in bytemuck::bytes_of(&value).iter().enumerate() {
+            writer[i] = *byte;
         }
     }
 
@@ -125,11 +145,9 @@ impl Exe {
     #[inline]
     #[instrument]
     pub fn headers(&self) -> PeHeaders {
-        let bytes = self
-            .read_many(0x170usize..0x400usize)
-            .expect("`EXE` does not have headers?");
-
-        println!("{:x}", bytes[0]);
+        // Offsets from 0x170 where this data lies. Easier to read when given names
+        const ENTRY_POINT: usize = 0x28usize;
+        const SECTIONS: usize = 0x108usize;
 
         todo!();
     }
