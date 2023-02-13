@@ -40,50 +40,9 @@ fn read<T: Pod>(bytes: &[u8], start: usize) -> T {
 }
 
 fn main() {
-    starb_logging::init();
-
-    let bytes = fs::read(
-        "C:/Program Files (x86)/Steam/steamapps/common/SpaceEngine/system/SpaceEngine.exe",
-    )
-    .unwrap();
-
-    let entry = read::<u32>(&bytes, 0x198);
-
-    for i in 0usize.. {
-        let name = String::from_utf8_lossy(&read::<[u8; 8usize]>(&bytes, 0x278 + i * 0x28usize))
-            .replace('\0', "");
-
-        if name.is_empty() {
-            break;
-        } else if name == ".rdata" {
-            let r_data = read::<u32>(&bytes, 0x278 + i * 0x3cusize) as usize;
-
-            let mut file = std::fs::File::create("test").unwrap();
-
-            // TODO: Use SizeOfRawData here
-            for i in 0usize..100000usize {
-                let import = read::<[u32; 2usize]>(&bytes, r_data + i * 8usize);
-
-                if import[1usize] != 0u32 || import[0usize] == 0u32 {
-                } else {
-                    let address = import[0usize] as usize + 0x2;
-                    let mut name = String::new();
-                        for offset in address.. {
-                            // FIXME: 😳
-                            let byte = read::<u8>(&bytes, offset - 0xC00);
-
-                            if byte == 0u8 {
-                                break;
-                            }
-
-                            name.push(char::from(byte));
-                        }
-
-                        writeln!(file, "{}: {:x}", name, import[0]).unwrap();
-                }
-            }
-        }
-    }
+    EXE.init("SpaceEngine.exe").unwrap();
+    EXE.headers();
+    // EXE.save("SpaceEngine.exe").unwrap();
 
     /*
     unsafe {
