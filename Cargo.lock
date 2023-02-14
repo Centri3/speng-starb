@@ -315,6 +315,7 @@ name = "starb"
 version = "3.1.0"
 dependencies = [
  "bytemuck",
+ "eyre",
  "once_cell",
  "parking_lot",
  "starb-logging",

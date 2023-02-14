@@ -1,4 +1,7 @@
 #[macro_use]
+extern crate eyre;
+
+#[macro_use]
 extern crate tracing;
 
 mod exe;
@@ -10,10 +13,10 @@ use crate::exe::EXE;
 compile_error!("`Star Browser Utilities` should only be compiled on `Windows`");
 
 fn main() {
-    EXE.init("SpaceEngine.exe").unwrap();
+    starb_logging::init();
 
-    use std::io::Write;
-    let mut lol = std::fs::File::create("headers.txt").unwrap();
-    writeln!(lol, "{:#x?}", EXE.headers()).unwrap();
-    // EXE.save("SpaceEngine.exe").unwrap();
+    EXE.init("SpaceEngine.exe").unwrap();
+    EXE.write_to(1, u32::MAX).unwrap();
+    EXE.read_to::<u32>(1).unwrap();
+    EXE.write(1, 1).unwrap();
 }

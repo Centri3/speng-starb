@@ -22,9 +22,9 @@ pub fn init() {
     // Create layers for tracing
     let env_filter = EnvFilter::from_str("trace").unwrap();
     let error = ErrorLayer::default();
-    let fmt_stdout = fmt::layer().with_writer(io::stdout).pretty();
+    let fmt_stdout = fmt::layer().with_writer(io::stdout);
     let fmt_file =
-        fmt::layer().with_writer(File::create(LOG_FILE).expect("Failed to create `LOG_FILE`")).pretty();
+        fmt::layer().with_writer(File::create(LOG_FILE).expect("Failed to create `LOG_FILE`"));
 
     tracing_subscriber::registry()
         .with(env_filter)
