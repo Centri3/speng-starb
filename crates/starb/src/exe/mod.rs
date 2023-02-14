@@ -1,4 +1,5 @@
 use bytemuck::Pod;
+use eyre::Report;
 use eyre::Result;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
@@ -25,20 +26,17 @@ pub struct Exe {
 }
 
 impl Exe {
-    /// Internal function to reduce code repetition. `T` is never returned and
-    /// is always the return type of the calling function.
+    /// Internal function to reduce code repetition.
     #[inline]
-    #[instrument(skip(self))]
-    fn __return_out_of_bounds<T>(&self) -> Result<T> {
+    fn __return_out_of_bounds() -> Report {
         error!("Index out of bounds");
 
-        Err(eyre!("Index out of bounds"))
+        eyre!("Index out of bounds")
     }
 
     /// Internal function to reduce code repetition. Returns `self.inner`, or
     /// panics if it was uninitialized.
-    #[inline]
-    #[instrument(skip(self))]
+    #[inline(always)]
     fn __inner(&self) -> &RwLock<Vec<u8>> {
         self.inner
             .get()
@@ -46,7 +44,7 @@ impl Exe {
     }
 
     /// Initialize `EXE` with the file at `path`. Will panic if called twice.
-    #[inline]
+    #[inline(always)]
     #[instrument(skip(self))]
     pub fn init(&self, path: impl AsRef<Path> + fmt::Debug) -> Result<()> {
         let inner = fs::read(path.as_ref())?;
@@ -111,57 +109,80 @@ impl Exe {
     #[must_use]
     #[inline]
     #[instrument(skip(self))]
-    pub fn read(&self, index: usize) -> Option<u8> {
+    pub fn read(&self, index: usize) -> Result<u8> {
         trace!("Reading byte");
 
-        self.reader().get(index).copied()
+        self.reader()
+            .get(index)
+            .copied()
+            .ok_or_else(Self::__return_out_of_bounds)
     }
 
     /// Get the bytes in `range`.
     #[must_use]
     #[inline]
     #[instrument(skip(self))]
-    pub fn read_many<R>(&self, range: R) -> Option<Vec<u8>>
+    pub fn read_many<R>(&self, range: R) -> Result<Vec<u8>>
     where
         R: fmt::Debug + SliceIndex<[u8], Output = [u8]>,
     {
         trace!("Reading bytes");
 
-        self.reader().get(range).map(<[u8]>::to_vec)
+        self.reader()
+            .get(range)
+            .map(<[u8]>::to_vec)
+            .ok_or_else(Self::__return_out_of_bounds)
     }
 
     /// Get the bytes at `index` and cast to `P`.
     #[must_use]
     #[inline]
     #[instrument(skip(self), fields(P = any::type_name::<P>()))]
-    pub fn read_to<P: Pod>(&self, index: usize) -> Option<P> {
+    pub fn read_to<P: Pod>(&self, index: usize) -> Result<P> {
         let range = index..(index + mem::size_of::<P>());
 
         self.read_many(range).map(|b| *bytemuck::from_bytes(&b))
     }
 
-    /// Read bytes at `index` and cast to a String. Will read until `NULL` is
-    /// found or it's read `size` number of bytes. Will panic if it's out of
-    /// bounds or invalid utf-8!
-    // TODO: This should be refactored, also add some tracing stuff
-    #[must_use]
-    #[inline]
-    #[instrument(skip(self))]
-    pub fn read_to_string(&self, index: usize, size: Option<usize>) -> String {
-        let reader = self.reader();
+    /// Extraction is a LOT cleaner here.
+    #[inline(always)]
+    #[warn(unused)]
+    fn __read_to_string_some(&self, index: usize, size: usize) -> Result<Vec<u8>> {
+        self.read_many(index..index + size)
+    }
+
+    /// See above.
+    // TODO: This is pretty ugly but I'm not sure if it can be done cleaner
+    #[inline(always)]
+    fn __read_to_string_none(&self, index: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![];
 
-        for i in 0usize.. {
-            let byte = *reader.get(index + i).unwrap();
+        for i in index.. {
+            let byte = self.read(i)?;
 
-            if byte == 0u8 || i > size.unwrap_or(usize::MAX) {
+            if byte == 0u8 {
                 break;
             }
 
             bytes.push(byte);
         }
 
-        String::from_utf8(bytes).unwrap()
+        Ok(bytes)
+    }
+
+    /// Read bytes at `index` and cast to a String. Will read until `NULL` is
+    /// found or it's read `size` number of bytes. Will panic if it's out of
+    /// bounds or invalid utf-8!
+    #[must_use]
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
+        let bytes = match size {
+            Some(size) => self.__read_to_string_some(index, size)?,
+            None => self.__read_to_string_none(index)?,
+        };
+
+        Ok(String::from_utf8(bytes)?.replace('\0', ""))
     }
 
     /// Write the byte in `value` to `index`. Returns the previous bytes, which
@@ -173,7 +194,7 @@ impl Exe {
         trace!("Writing byte");
 
         if index > self.len() {
-            return self.__return_out_of_bounds::<u8>();
+            return Err(Self::__return_out_of_bounds());
         }
 
         Ok(mem::replace(&mut self.writer()[index], value))
@@ -193,7 +214,7 @@ impl Exe {
 
         // This should catch all panics possible with `.splice()`
         if !range.contains(&range_other.start) || !range.contains(&range_other.end) {
-            return self.__return_out_of_bounds::<Vec<u8>>();
+            return Err(Self::__return_out_of_bounds());
         }
 
         Ok(self.writer().splice(range_other, value.to_vec()).collect())
@@ -218,7 +239,7 @@ impl Exe {
         info!("Saving `EXE`");
 
         if env::var("STARB_CALLED_COMMIT").is_ok() {
-            warn!("I was called multiple times! This is a bug (albeit benign).")
+            warn!("I was called multiple times! This is a bug (albeit benign).");
         }
 
         // Throw a warning if this is called twice

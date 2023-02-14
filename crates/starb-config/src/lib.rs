@@ -3,19 +3,16 @@
 #[macro_use]
 extern crate tracing;
 
-use {
-    once_cell::sync::Lazy,
-    parking_lot::RwLock,
-    ron::{
-        de,
-        ser::{self, PrettyConfig},
-    },
-    serde::{Deserialize, Serialize},
-    std::{
-        fs::{self, File},
-        io::Write,
-    },
-};
+use once_cell::sync::Lazy;
+use parking_lot::RwLock;
+use ron::de;
+use ron::ser::PrettyConfig;
+use ron::ser::{self};
+use serde::Deserialize;
+use serde::Serialize;
+use std::fs::File;
+use std::fs::{self};
+use std::io::Write;
 
 // This will keep the PrettyConfig consistent everywhere even if updated, and is
 // convenient of course. What can go wrong?

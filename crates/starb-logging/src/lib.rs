@@ -3,12 +3,16 @@
 #[macro_use]
 extern crate tracing;
 
-use {
-    color_eyre::config::HookBuilder,
-    std::{env, fs::File, io, panic, str::FromStr},
-    tracing_error::ErrorLayer,
-    tracing_subscriber::{fmt, prelude::*, EnvFilter},
-};
+use color_eyre::config::HookBuilder;
+use std::env;
+use std::fs::File;
+use std::io;
+use std::panic;
+use std::str::FromStr;
+use tracing_error::ErrorLayer;
+use tracing_subscriber::fmt;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 // Might as well keep this consistent everywhere too
 pub const LOG_FILE: &str = "starb.log";
