@@ -1,0 +1,3 @@
+Err(
+    "`EXE`'s headers are invalid or don't exist",
+)
