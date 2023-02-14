@@ -25,9 +25,21 @@ pub struct Exe {
 }
 
 impl Exe {
-    #[inline(always)]
+    /// Internal function to reduce code repetition. `T` is never returned and
+    /// is always the return type of the calling function.
+    #[inline]
     #[instrument(skip(self))]
-    fn inner(&self) -> &RwLock<Vec<u8>> {
+    fn __return_out_of_bounds<T>(&self) -> Result<T> {
+        error!("Index out of bounds");
+
+        Err(eyre!("Index out of bounds"))
+    }
+
+    /// Internal function to reduce code repetition. Returns `self.inner`, or
+    /// panics if it was uninitialized.
+    #[inline]
+    #[instrument(skip(self))]
+    fn __inner(&self) -> &RwLock<Vec<u8>> {
         self.inner
             .get()
             .expect("`EXE` was uninitialized, please call `.init(path)`")
@@ -63,28 +75,28 @@ impl Exe {
     #[inline]
     #[instrument(skip(self))]
     pub fn reader(&self) -> RwLockReadGuard<Vec<u8>> {
-        self.inner().read()
+        self.__inner().read()
     }
 
     /// Get write access.
     #[inline]
     #[instrument(skip(self))]
     pub fn writer(&self) -> RwLockWriteGuard<Vec<u8>> {
-        self.inner().write()
+        self.__inner().write()
     }
 
     /// Try to get read access. Does not block.
     #[inline]
     #[instrument(skip(self))]
     pub fn try_reader(&self) -> Option<RwLockReadGuard<Vec<u8>>> {
-        self.inner().try_read()
+        self.__inner().try_read()
     }
 
     /// Try to get write access. Does not block.
     #[inline]
     #[instrument(skip(self))]
     pub fn try_writer(&self) -> Option<RwLockWriteGuard<Vec<u8>>> {
-        self.inner().try_write()
+        self.__inner().try_write()
     }
 
     /// Get the length of `EXE`.
@@ -92,7 +104,7 @@ impl Exe {
     #[inline]
     #[instrument(skip(self))]
     pub fn len(&self) -> usize {
-        self.inner().read().len()
+        self.__inner().read().len()
     }
 
     /// Get the byte at `index`.
@@ -161,9 +173,7 @@ impl Exe {
         trace!("Writing byte");
 
         if index > self.len() {
-            error!("Index out of bounds");
-
-            return Err(eyre!("Index out of bounds"));
+            return self.__return_out_of_bounds::<u8>();
         }
 
         Ok(mem::replace(&mut self.writer()[index], value))
@@ -183,9 +193,7 @@ impl Exe {
 
         // This should catch all panics possible with `.splice()`
         if !range.contains(&range_other.start) || !range.contains(&range_other.end) {
-            error!("Index out of bounds");
-
-            return Err(eyre!("Index out of bounds"));
+            return self.__return_out_of_bounds::<Vec<u8>>();
         }
 
         Ok(self.writer().splice(range_other, value.to_vec()).collect())

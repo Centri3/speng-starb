@@ -16,7 +16,7 @@ fn main() {
     starb_logging::init();
 
     EXE.init("SpaceEngine.exe").unwrap();
-    EXE.write_to(1, u32::MAX).unwrap();
+    EXE.write_to(100000000000, u32::MAX).unwrap();
     EXE.read_to::<u32>(1).unwrap();
     EXE.write(1, 1).unwrap();
 }
