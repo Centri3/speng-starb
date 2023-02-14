@@ -1,1 +1,6 @@
+# Formatting will silently fail if rustfmt fails to reduce a string's width
 format_strings = true
+
+# Preference
+imports_granularity = "Item"
+wrap_comments = true
