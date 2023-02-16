@@ -20,7 +20,7 @@ pub struct NtImage {
 
 impl NtImage {
     /// Internal function to define `HEADERS`.
-    #[inline]
+    #[inline(always)]
     const fn __define() -> Self {
         Self {
             optional: OnceCell::new(),
@@ -30,12 +30,12 @@ impl NtImage {
 
     /// Internal function to reduce code repetition. Allows getting any of
     /// `HEADER`'s fields which are wrapped in `OnceCell<T>`.
-    #[inline]
+    #[inline(always)]
     #[instrument(skip(value), level = "trace")]
-    fn __get_expect_uninitialized<T: fmt::Debug>(value: &OnceCell<T>) -> &T {
+    fn __get_expect_uninitialized<T: fmt::Debug>(value: &OnceCell<T>) -> Result<&T> {
         value
             .get()
-            .expect("`HEADERS` was uninitialized, please call `.init()`")
+            .ok_or(eyre!("`HEADERS` was uninitialized, please call `.init()`"))
     }
 
     #[inline]

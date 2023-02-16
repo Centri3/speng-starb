@@ -28,9 +28,9 @@ pub struct Exe {
 
 impl Exe {
     /// Internal function to define `EXE`
-    #[inline]
+    #[inline(always)]
     const fn __define() -> Self {
-        Exe {
+        Self {
             inner: OnceCell::new(),
         }
     }
@@ -66,7 +66,6 @@ impl Exe {
         // though it will show what the user did wrong!
         if inner.len() < 8000000usize {
             warn!(
-                ?path,
                 size = inner.len(),
                 "Selected file is below 8MB in size, is this really SpaceEngine?"
             );
