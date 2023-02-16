@@ -1,3 +1,4 @@
+use super::headers::NtImage;
 use bytemuck::Pod;
 use eyre::Report;
 use eyre::Result;
@@ -16,9 +17,7 @@ use std::path::Path;
 use std::slice::SliceIndex;
 
 /// Global variable for `Exe`.
-pub static EXE: Exe = Exe {
-    inner: OnceCell::new(),
-};
+pub static EXE: Exe = Exe::__define();
 
 /// Abstraction over iterating a `Vec<u8>`. Should only be initialized once.
 #[derive(Debug, Default)]
@@ -28,6 +27,14 @@ pub struct Exe {
 }
 
 impl Exe {
+    /// Internal function to define `EXE`
+    #[inline]
+    const fn __define() -> Self {
+        Exe {
+            inner: OnceCell::new(),
+        }
+    }
+
     /// Internal function to reduce code repetition.
     #[inline(always)]
     #[instrument(level = "trace")]
@@ -39,13 +46,14 @@ impl Exe {
     /// panics if it was uninitialized.
     #[inline(always)]
     #[instrument(skip(self), level = "trace")]
-    fn __inner(&self) -> &RwLock<Vec<u8>> {
+    fn __inner(&self) -> Result<&RwLock<Vec<u8>>> {
         self.inner
             .get()
-            .expect("`EXE` was uninitialized, please call `.init(path)`")
+            .ok_or(eyre!("`EXE` was uninitialized, please call `.init(path)`"))
     }
 
-    /// Initialize `EXE` with the file at `path`. Will panic if called twice.
+    /// Initialize `EXE` with the file at `path`. Also initializes `HEADERS`.
+    /// Will panic if called twice.
     #[inline(always)]
     #[instrument(skip(self))]
     pub fn init(&self, path: impl AsRef<Path> + fmt::Debug) -> Result<()> {
@@ -66,7 +74,7 @@ impl Exe {
 
         self.inner
             .set(RwLock::new(inner))
-            .unwrap_or_else(|_| panic!("`EXE` was already initialized"));
+            .or(Err(eyre!("`EXE` was already initialized")))?;
 
         Ok(())
     }
@@ -74,37 +82,41 @@ impl Exe {
     /// Get read access.
     #[inline]
     #[instrument(skip(self))]
-    pub fn reader(&self) -> RwLockReadGuard<Vec<u8>> {
-        self.__inner().read()
+    pub fn reader(&self) -> Result<RwLockReadGuard<Vec<u8>>> {
+        Ok(self.__inner()?.read())
     }
 
     /// Get write access.
     #[inline]
     #[instrument(skip(self))]
-    pub fn writer(&self) -> RwLockWriteGuard<Vec<u8>> {
-        self.__inner().write()
+    pub fn writer(&self) -> Result<RwLockWriteGuard<Vec<u8>>> {
+        Ok(self.__inner()?.write())
     }
 
-    /// Try to get read access. Does not block.
+    /// Try to get exclusive read access. Does not block.
     #[inline]
     #[instrument(skip(self))]
-    pub fn try_reader(&self) -> Option<RwLockReadGuard<Vec<u8>>> {
-        self.__inner().try_read()
+    pub fn try_reader(&self) -> Result<RwLockReadGuard<Vec<u8>>> {
+        self.__inner()?
+            .try_read()
+            .ok_or(eyre!("Could not get exclusive read access for `EXE`"))
     }
 
-    /// Try to get write access. Does not block.
+    /// Try to get exclusive write access. Does not block.
     #[inline]
     #[instrument(skip(self))]
-    pub fn try_writer(&self) -> Option<RwLockWriteGuard<Vec<u8>>> {
-        self.__inner().try_write()
+    pub fn try_writer(&self) -> Result<RwLockWriteGuard<Vec<u8>>> {
+        self.__inner()?
+            .try_write()
+            .ok_or(eyre!("Could not get exclusive write access for `EXE`"))
     }
 
     /// Get the length of `EXE`.
     #[must_use]
     #[inline]
     #[instrument(skip(self))]
-    pub fn len(&self) -> usize {
-        self.__inner().read().len()
+    pub fn len(&self) -> Result<usize> {
+        Ok(self.__inner()?.read().len())
     }
 
     /// Get the byte at `index`.
@@ -113,7 +125,7 @@ impl Exe {
     pub fn read(&self, index: usize) -> Result<u8> {
         trace!("Reading byte");
 
-        self.reader()
+        self.reader()?
             .get(index)
             .copied()
             .ok_or_else(Self::__return_out_of_bounds)
@@ -128,7 +140,7 @@ impl Exe {
     {
         trace!("Reading bytes");
 
-        self.reader()
+        self.reader()?
             .get(range)
             .map(<[u8]>::to_vec)
             .ok_or_else(Self::__return_out_of_bounds)
@@ -141,6 +153,20 @@ impl Exe {
         let range = index..(index + mem::size_of::<P>());
 
         self.read_many(range).map(|b| *bytemuck::from_bytes(&b))
+    }
+
+    /// Read bytes at `index` and cast to a String. Will read until `NULL` is
+    /// found or it's read `size` number of bytes. Will panic if it's out of
+    /// bounds or invalid utf-8!
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
+        let bytes = match size {
+            Some(size) => self.__read_to_string_some(index, size)?,
+            None => self.__read_to_string_none(index)?,
+        };
+
+        Ok(String::from_utf8(bytes)?.replace('\0', ""))
     }
 
     /// Extracted from `.read_to_string()`
@@ -170,20 +196,6 @@ impl Exe {
         Ok(bytes)
     }
 
-    /// Read bytes at `index` and cast to a String. Will read until `NULL` is
-    /// found or it's read `size` number of bytes. Will panic if it's out of
-    /// bounds or invalid utf-8!
-    #[inline]
-    #[instrument(skip(self))]
-    pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
-        let bytes = match size {
-            Some(size) => self.__read_to_string_some(index, size)?,
-            None => self.__read_to_string_none(index)?,
-        };
-
-        Ok(String::from_utf8(bytes)?.replace('\0', ""))
-    }
-
     /// Write the byte in `value` to `index`. Returns the previous bytes, which
     /// can be ignored.
     #[inline]
@@ -191,11 +203,11 @@ impl Exe {
     pub fn write(&self, index: usize, value: u8) -> Result<u8> {
         trace!("Writing byte");
 
-        if index > self.len() {
+        if index > self.len()? {
             return Err(Self::__return_out_of_bounds());
         }
 
-        Ok(mem::replace(&mut self.writer()[index], value))
+        Ok(mem::replace(&mut self.writer()?[index], value))
     }
 
     /// Write `value` to `index`. Returns the previous bytes, which can
@@ -206,7 +218,7 @@ impl Exe {
         trace!("Writing bytes");
 
         // Range containing every byte of `EXE`
-        let range = 0usize..self.len();
+        let range = 0usize..self.len()?;
         // Range containing every byte of `index` and `value`
         let range_other = index..index + value.len();
 
@@ -215,7 +227,7 @@ impl Exe {
             return Err(Self::__return_out_of_bounds());
         }
 
-        Ok(self.writer().splice(range_other, value.to_vec()).collect())
+        Ok(self.writer()?.splice(range_other, value.to_vec()).collect())
     }
 
     /// Cast `value` to its bytes and write to `index`. Returns the previous
@@ -225,6 +237,12 @@ impl Exe {
     pub fn write_to<P: fmt::Debug + Pod>(&self, index: usize, value: P) -> Result<P> {
         self.write_many(index, bytemuck::bytes_of(&value))
             .map(|b| *bytemuck::from_bytes(&b))
+    }
+
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn headers(&self) -> &NtImage {
+        todo!();
     }
 
     /// Saves the resulting bytes to the file at `path`
@@ -243,7 +261,7 @@ impl Exe {
         // Throw a warning if this is called twice
         env::set_var("STARB_CALLED_COMMIT", "true");
 
-        File::create(path.as_ref())?.write_all(&self.reader())?;
+        File::create(path.as_ref())?.write_all(&self.reader()?)?;
 
         Ok(())
     }

@@ -6,7 +6,6 @@ extern crate tracing;
 
 mod exe;
 
-use crate::exe::headers::HEADERS;
 use crate::exe::EXE;
 use color_eyre::config::HookBuilder;
 use color_eyre::config::PanicHook;
@@ -31,15 +30,16 @@ fn main() {
 
     EXE.init("SpaceEngine.exe").unwrap();
     EXE.read_to::<u32>(1).unwrap();
-    HEADERS.init().unwrap();
 }
 
 /// Extracted from `main()`
 #[inline(always)]
+#[instrument(level = "trace")]
 fn __setup_logging() -> WorkerGuard {
-    const LEVEL: Level = match cfg!(debug_assertions) {
-        true => Level::TRACE,
-        false => Level::INFO,
+    const LEVEL: Level = if cfg!(debug_assertions) {
+        Level::TRACE
+    } else {
+        Level::INFO
     };
 
     // Backtrace should only be enabled in debug mode
@@ -80,6 +80,7 @@ fn __setup_logging() -> WorkerGuard {
 
 /// Extracted from `__setup_logging()`
 #[inline(always)]
+#[instrument(skip(ph), level = "trace")]
 fn __setup_panic_hook(ph: PanicHook) {
     panic::set_hook(Box::new(move |pi| {
         error!(
@@ -91,6 +92,7 @@ fn __setup_panic_hook(ph: PanicHook) {
 
 /// Extracted from `__setup_logging()`
 #[inline(always)]
+#[instrument(level = "trace")]
 fn __print_debug_info() {
     debug!(starb_version = env!("CARGO_PKG_VERSION"));
     debug!(target_triple = %HOST);
