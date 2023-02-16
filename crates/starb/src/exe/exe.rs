@@ -1,3 +1,5 @@
+use crate::exe::headers::HEADERS;
+
 use super::headers::NtImage;
 use bytemuck::Pod;
 use eyre::Report;
@@ -74,6 +76,9 @@ impl Exe {
         self.inner
             .set(RwLock::new(inner))
             .or(Err(eyre!("`EXE` was already initialized")))?;
+
+        // Implicitly initialize `HEADERS` if `EXE.init()` is called
+        HEADERS.init()?;
 
         Ok(())
     }

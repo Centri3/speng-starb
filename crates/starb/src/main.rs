@@ -12,14 +12,13 @@ extern crate tracing;
 mod exe;
 
 use crate::exe::EXE;
-use color_eyre::config::EyreHook;
 use color_eyre::config::HookBuilder;
-use color_eyre::config::PanicHook;
 use std::env;
 use std::fs;
 use std::io;
 use std::panic;
 use target_lexicon::HOST;
+use tracing_appender::non_blocking::NonBlocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::never;
 use tracing_error::ErrorLayer;
@@ -49,33 +48,13 @@ fn __setup_logging() -> WorkerGuard {
 
     let (log_file, guard) = tracing_appender::non_blocking(never("", "starb.log"));
 
-    // We want logs in release mode to be a little less verbose
-    #[cfg(debug_assertions)]
-    const ENV_FILTER: &str = "trace";
-    #[cfg(not(debug_assertions))]
-    const ENV_FILTER: &str = "debug";
-
     // Backtrace should only be enabled in debug mode
     #[cfg(debug_assertions)]
     env::set_var("RUST_BACKTRACE", "full");
 
-    let fmt_layer = fmt::layer()
-        .with_writer(log_file.and(io::stdout))
-        .with_thread_names(true);
+    __setup_tracing(log_file);
 
-    registry()
-        .with(ErrorLayer::default())
-        .with(EnvFilter::try_new(ENV_FILTER).unwrap())
-        .with(fmt_layer)
-        .init();
-
-    // Setup color-eyre with custom settings
-    let (ph, eh) = HookBuilder::default()
-        .display_env_section(false)
-        .panic_section("Please report this at: https://github.com/Centri3/speng-starb/issues/new")
-        .into_hooks();
-
-    __setup_hooks(eh, ph);
+    __setup_hooks();
 
     trace!("Logging successfully setup");
 
@@ -87,8 +66,35 @@ fn __setup_logging() -> WorkerGuard {
 
 /// Extracted from `__setup_logging()`
 #[inline(always)]
-#[instrument(skip(eh, ph), level = "trace")]
-fn __setup_hooks(eh: EyreHook, ph: PanicHook) {
+#[instrument(level = "trace")]
+fn __setup_tracing(log_file: NonBlocking) {
+    // We want logs in release mode to be a little less verbose
+    #[cfg(debug_assertions)]
+    const ENV_FILTER: &str = "trace";
+    #[cfg(not(debug_assertions))]
+    const ENV_FILTER: &str = "debug";
+
+    let fmt_layer = fmt::layer()
+        .with_writer(log_file.and(io::stdout))
+        .with_thread_names(true);
+
+    registry()
+        .with(ErrorLayer::default())
+        .with(EnvFilter::try_new(ENV_FILTER).unwrap())
+        .with(fmt_layer)
+        .init();
+}
+
+/// Extracted from `__setup_logging()`
+#[inline(always)]
+#[instrument(level = "trace")]
+fn __setup_hooks() {
+    // Setup color-eyre with custom settings
+    let (ph, eh) = HookBuilder::default()
+        .display_env_section(false)
+        .panic_section("Please report this at: https://github.com/Centri3/speng-starb/issues/new")
+        .into_hooks();
+
     eh.install().expect("Failed to install color-eyre");
 
     panic::set_hook(Box::new(move |pi| {

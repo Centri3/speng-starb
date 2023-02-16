@@ -4,6 +4,16 @@ use once_cell::sync::OnceCell;
 use std::fmt;
 use std::ops::Range;
 
+/// Internal function to reduce code repetition. Allows getting any of
+/// `HEADER`'s fields which are wrapped in `OnceCell<T>`.
+#[inline(always)]
+#[instrument(skip(value), level = "trace")]
+fn __get_initialized<T: fmt::Debug>(value: &OnceCell<T>) -> Result<&T> {
+    value
+        .get()
+        .ok_or(eyre!("`HEADERS` was uninitialized, please call `.init()`"))
+}
+
 /// Type definition for `IMAGE_DATA_DIRECTORY`.
 pub type NtDataDirectory = Vec<Range<usize>>;
 /// Type definition for `IMAGE_SECTION_HEADER`.
@@ -28,20 +38,22 @@ impl NtImage {
         }
     }
 
-    /// Internal function to reduce code repetition. Allows getting any of
-    /// `HEADER`'s fields which are wrapped in `OnceCell<T>`.
-    #[inline(always)]
-    #[instrument(skip(value), level = "trace")]
-    fn __get_expect_uninitialized<T: fmt::Debug>(value: &OnceCell<T>) -> Result<&T> {
-        value
-            .get()
-            .ok_or(eyre!("`HEADERS` was uninitialized, please call `.init()`"))
-    }
-
     #[inline]
     #[instrument(skip(self))]
     pub fn init(&self) -> Result<()> {
         todo!();
+    }
+
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn optional(&self) -> Result<&NtOptional> {
+        __get_initialized(&self.optional)
+    }
+
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn sections(&self) -> Result<&NtImageSections> {
+        __get_initialized(&self.sections)
     }
 }
 
@@ -49,4 +61,18 @@ impl NtImage {
 pub struct NtOptional {
     entry_point: usize,
     directory: NtDataDirectory,
+}
+
+impl NtOptional {
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn entry_point(&self) -> usize {
+        self.entry_point
+    }
+
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn directory(&self) -> &NtDataDirectory {
+        &self.directory
+    }
 }
