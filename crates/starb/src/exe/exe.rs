@@ -1,6 +1,5 @@
-use crate::exe::headers::HEADERS;
-
 use super::headers::NtImage;
+use crate::exe::headers::HEADERS;
 use bytemuck::Pod;
 use eyre::Report;
 use eyre::Result;
@@ -40,22 +39,36 @@ impl Exe {
     /// Internal function to reduce code repetition.
     #[inline(always)]
     #[instrument(level = "trace")]
-    fn __return_out_of_bounds() -> Report {
+    fn __report_overflow() -> Report {
+        eyre!("Overflowed index")
+    }
+
+    /// Internal function to reduce code repetition.
+    #[inline(always)]
+    #[instrument(level = "trace")]
+    fn __report_out_of_bounds() -> Report {
         eyre!("Index out of bounds")
     }
 
-    /// Internal function to reduce code repetition. Returns `self.inner`, or
-    /// panics if it was uninitialized.
+    /// Internal function to reduce code repetition. Returns
+    /// `.__report_out_of_bounds()` wrapped in `Err`. Cleaner in some cases.
+    #[inline(always)]
+    #[instrument(level = "trace")]
+    fn __return_out_of_bounds() -> Result<()> {
+        Err(Self::__report_out_of_bounds())
+    }
+
+    /// Internal function to reduce code repetition. Returns `self.inner`
     #[inline(always)]
     #[instrument(skip(self), level = "trace")]
     fn __inner(&self) -> Result<&RwLock<Vec<u8>>> {
         self.inner
             .get()
-            .ok_or(eyre!("`EXE` was uninitialized, please call `.init(path)`"))
+            .ok_or_else(|| eyre!("`EXE` was uninitialized, please call `.init(path)`"))
     }
 
     /// Initialize `EXE` with the file at `path`. Also initializes `HEADERS`.
-    /// Will panic if called twice.
+    /// Don't call this twice (at least successfully).
     #[inline(always)]
     #[instrument(skip(self))]
     pub fn init(&self, path: impl AsRef<Path> + fmt::Debug) -> Result<()> {
@@ -75,7 +88,7 @@ impl Exe {
 
         self.inner
             .set(RwLock::new(inner))
-            .or(Err(eyre!("`EXE` was already initialized")))?;
+            .map_err(|_| eyre!("`EXE` was already initialized"))?;
 
         // Implicitly initialize `HEADERS` if `EXE.init()` is called
         HEADERS.init()?;
@@ -83,14 +96,14 @@ impl Exe {
         Ok(())
     }
 
-    /// Get read access.
+    /// Get read access. Does not fail, though can dead-lock.
     #[inline]
     #[instrument(skip(self))]
     pub fn reader(&self) -> Result<RwLockReadGuard<Vec<u8>>> {
         Ok(self.__inner()?.read())
     }
 
-    /// Get write access.
+    /// Get write access. Does not fail, though can dead-lock.
     #[inline]
     #[instrument(skip(self))]
     pub fn writer(&self) -> Result<RwLockWriteGuard<Vec<u8>>> {
@@ -103,7 +116,7 @@ impl Exe {
     pub fn try_reader(&self) -> Result<RwLockReadGuard<Vec<u8>>> {
         self.__inner()?
             .try_read()
-            .ok_or(eyre!("Could not get exclusive read access for `EXE`"))
+            .ok_or_else(|| eyre!("Could not get exclusive read access for `EXE`"))
     }
 
     /// Try to get exclusive write access. Does not block.
@@ -112,7 +125,7 @@ impl Exe {
     pub fn try_writer(&self) -> Result<RwLockWriteGuard<Vec<u8>>> {
         self.__inner()?
             .try_write()
-            .ok_or(eyre!("Could not get exclusive write access for `EXE`"))
+            .ok_or_else(|| eyre!("Could not get exclusive write access for `EXE`"))
     }
 
     /// Get the length of `EXE`.
@@ -132,7 +145,7 @@ impl Exe {
         self.reader()?
             .get(index)
             .copied()
-            .ok_or_else(Self::__return_out_of_bounds)
+            .ok_or_else(Self::__report_out_of_bounds)
     }
 
     /// Get the bytes in `range`.
@@ -147,21 +160,25 @@ impl Exe {
         self.reader()?
             .get(range)
             .map(<[u8]>::to_vec)
-            .ok_or_else(Self::__return_out_of_bounds)
+            .ok_or_else(Self::__report_out_of_bounds)
     }
 
     /// Get the bytes at `index` and cast to `P`.
     #[inline]
     #[instrument(skip(self), fields(P = any::type_name::<P>()))]
     pub fn read_to<P: Pod>(&self, index: usize) -> Result<P> {
-        let range = index..(index + mem::size_of::<P>());
+        // TODO: This is kinda ugly now, ngl
+        let range = index
+            ..(index
+                .checked_add(mem::size_of::<P>())
+                .ok_or_else(Self::__report_overflow)?);
 
         self.read_many(range).map(|b| *bytemuck::from_bytes(&b))
     }
 
     /// Read bytes at `index` and cast to a String. Will read until `NULL` is
-    /// found or it's read `size` number of bytes. Will panic if it's out of
-    /// bounds or invalid utf-8!
+    /// found or it's read `size` number of bytes. Will return `Err` if it's out
+    /// of bounds or invalid utf-8!
     #[inline]
     #[instrument(skip(self))]
     pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
@@ -177,7 +194,12 @@ impl Exe {
     #[inline(always)]
     #[instrument(skip(self), level = "trace")]
     fn __read_to_string_some(&self, index: usize, size: usize) -> Result<Vec<u8>> {
-        self.read_many(index..index + size)
+        self.read_many(
+            index
+                ..index
+                    .checked_add(size)
+                    .ok_or_else(Self::__report_overflow)?,
+        )
     }
 
     /// Extracted from `.read_to_string()`
@@ -208,7 +230,7 @@ impl Exe {
         trace!("Writing byte");
 
         if index > self.len()? {
-            return Err(Self::__return_out_of_bounds());
+            Self::__return_out_of_bounds()?;
         }
 
         Ok(mem::replace(&mut self.writer()?[index], value))
@@ -224,11 +246,15 @@ impl Exe {
         // Range containing every byte of `EXE`
         let range = 0usize..self.len()?;
         // Range containing every byte of `index` and `value`
-        let range_other = index..index + value.len();
+        let range_other = index
+            ..index
+                .checked_add(value.len())
+                .ok_or_else(Self::__report_overflow)?;
 
         // This should catch all panics possible with `.splice()`
+        // TODO: Is there a cleaner way to do this?
         if !range.contains(&range_other.start) || !range.contains(&range_other.end) {
-            return Err(Self::__return_out_of_bounds());
+            Self::__return_out_of_bounds()?;
         }
 
         Ok(self.writer()?.splice(range_other, value.to_vec()).collect())
@@ -243,10 +269,11 @@ impl Exe {
             .map(|b| *bytemuck::from_bytes(&b))
     }
 
+    /// Get `HEADERS`
     #[inline]
     #[instrument(skip(self))]
     pub fn headers(&self) -> &NtImage {
-        todo!();
+        &HEADERS
     }
 
     /// Saves the resulting bytes to the file at `path`

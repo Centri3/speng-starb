@@ -1,6 +1,7 @@
 // TODO: Light documentation
 
 use crate::exe::EXE;
+use color_eyre::Help;
 use eyre::Result;
 use hashbrown::HashMap;
 use once_cell::sync::OnceCell;
@@ -42,7 +43,7 @@ impl NtImage {
     fn __get_initialized<T: fmt::Debug>(value: &OnceCell<T>) -> Result<&T> {
         value
             .get()
-            .ok_or(eyre!("`HEADERS` was uninitialized, please call `.init()`"))
+            .ok_or_else(|| eyre!("`HEADERS` was uninitialized, please call `.init()`"))
     }
 
     #[inline(always)]
@@ -109,6 +110,12 @@ impl NtImage {
     pub fn init(&self) -> Result<()> {
         info!("Initializing `HEADERS`");
 
+        // Check whether DOS header exists. If it does, we jump over it
+        if EXE.read_to_string(0usize, Some(2usize))? != "MZ" {
+            return Err(eyre!("`HEADERS` does not contain DOS stub")
+                .suggestion("Select a file that is a portable executable next time"));
+        }
+
         self.__get_optional()?;
 
         self.__get_sections()?;
@@ -138,7 +145,7 @@ pub struct NtOptional {
 
 impl NtOptional {
     #[inline]
-    pub fn new(entry_point: usize, directory: NtDataDirectory) -> Self {
+    pub const fn new(entry_point: usize, directory: NtDataDirectory) -> Self {
         Self {
             entry_point,
             directory,
