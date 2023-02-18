@@ -78,9 +78,9 @@ impl NtImage {
         let pe = EXE.read_to_string(Self::NT_SIGNATURE, Some(4usize))?;
 
         // Verify both DOS and NT headers exist. This is actually quite nice.
-        (mz != "MZ" || pe != "PE")
-            .then_some(())
-            .ok_or_else(|| eyre!("`EXE` does not have valid headers: mz = {mz}, pe = {pe}"))?;
+        (mz == "MZ" && pe == "PE").then_some(()).ok_or_else(|| {
+            eyre!("`EXE` does not have valid header signatures: mz = {mz}, pe = {pe}")
+        })?;
 
         Self::__init_optional()?;
 
