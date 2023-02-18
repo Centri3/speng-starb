@@ -1,3 +1,5 @@
+//! Inner. Re-exported in `mod.rs`.
+
 use super::headers::NtImage;
 use crate::exe::headers::HEADERS;
 use bytemuck::Pod;

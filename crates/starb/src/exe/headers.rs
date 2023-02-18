@@ -1,22 +1,20 @@
-// TODO: Light documentation
+//! Module for analyzing `EXE`'s `IMAGE_NT_HEADERS`. Provides `HEADERS`.
 
 use crate::exe::EXE;
-use color_eyre::Help;
 use eyre::Result;
 use hashbrown::HashMap;
 use once_cell::sync::OnceCell;
 use std::fmt;
 use std::ops::Range;
 
-/// Type definition for `IMAGE_DATA_DIRECTORY`.
-pub type NtDataDirectory = [Range<usize>; 16usize];
+pub type NtDataDirectory = ();
 /// Type definition for `IMAGE_SECTION_HEADER`.
-pub type NtImageSections = HashMap<String, Range<usize>>;
+pub type NtImageSections = HashMap<&'static str, Range<usize>>;
 
 /// Global variable for `NtImage`. Can also be referenced using `EXE.headers()`
 pub static HEADERS: NtImage = NtImage::__define();
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct NtImage {
     optional: OnceCell<NtOptional>,
@@ -89,6 +87,7 @@ impl NtImage {
         Ok(())
     }
 
+    /// Extracted from `.init()`
     #[inline(always)]
     #[instrument(level = "trace")]
     fn __init_optional() -> Result<NtOptional> {
@@ -98,6 +97,7 @@ impl NtImage {
         Ok(NtOptional::new(entry_point, directories))
     }
 
+    /// Extracted from `__init_optional()`
     #[inline(always)]
     #[instrument(level = "trace")]
     fn __get_directories() -> Result<NtDataDirectory> {
@@ -105,6 +105,7 @@ impl NtImage {
         Ok(NtDataDirectory::default())
     }
 
+    /// Extacted from `.init()`
     #[inline(always)]
     #[instrument(level = "trace")]
     fn __init_sections() -> Result<NtImageSections> {
@@ -124,7 +125,7 @@ impl NtImage {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct NtOptional {
     entry_point: usize,
