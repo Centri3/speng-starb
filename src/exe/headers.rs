@@ -1,20 +1,24 @@
 //! Module for analyzing `EXE`'s `IMAGE_NT_HEADERS`. Provides `HEADERS`.
 
 use crate::exe::EXE;
+use crate::once::OnceCell;
 use eyre::Result;
 use hashbrown::HashMap;
-use once_cell::sync::OnceCell;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use std::fmt;
 use std::ops::Range;
 
 pub type NtDataDirectory = ();
 /// Type definition for `IMAGE_SECTION_HEADER`.
-pub type NtImageSections = HashMap<&'static str, Range<usize>>;
+pub type NtImageSections = HashMap<String, Range<usize>>;
 
 /// Global variable for `NtImage`. Can also be referenced using `EXE.headers()`
 pub static HEADERS: NtImage = NtImage::__define();
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct NtImage {
     optional: OnceCell<NtOptional>,
@@ -60,7 +64,7 @@ impl NtImage {
     /// `HEADERS`' fields which are wrapped in `OnceCell<T>`.
     #[inline(always)]
     #[instrument(skip(value), level = "trace")]
-    fn __get_initialized<T: fmt::Debug>(value: &OnceCell<T>) -> Result<&T> {
+    fn __get_initialized<T: fmt::Debug + Serialize>(value: &OnceCell<T>) -> Result<&T> {
         value
             .get()
             .ok_or_else(|| eyre!("`HEADERS` was uninitialized, please call `.init()`"))
@@ -80,9 +84,12 @@ impl NtImage {
             eyre!("`EXE` does not have valid header signatures: mz = {mz}, pe = {pe}")
         })?;
 
-        Self::__init_optional()?;
+        let optional = Self::__init_optional()?;
+        let sections = Self::__init_sections()?;
 
-        Self::__init_sections()?;
+        // FIXME: TEMPORARY
+        self.optional.set(optional).unwrap();
+        self.sections.set(sections).unwrap();
 
         Ok(())
     }
@@ -125,7 +132,7 @@ impl NtImage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct NtOptional {
     entry_point: usize,

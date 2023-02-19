@@ -12,19 +12,6 @@ crate-type = ["cdylib"]
 name = "starb"
 path = "src/main.rs"
 
-[dependencies]
-bytemuck = { version = "1.13.0", features = ["min_const_generics"] }
-color-eyre = "0.6.2"
-eyre = "0.6.8"
-hashbrown = "0.13.2"
-once_cell = "1.17.0"
-parking_lot = "0.12.1"
-target-lexicon = "0.12.6"
-tracing = "0.1.37"
-tracing-appender = "0.2.2"
-tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
-
 # This is seemingly necessary for egui to build. Shiver me timbers
 [profile.dev.package."*"]
 opt-level = 2
@@ -32,3 +19,18 @@ opt-level = 2
 # Better performance with color-eyre
 [profile.dev.package.backtrace]
 opt-level = 3
+
+[dependencies]
+bytemuck = { version = "1.13.0", features = ["min_const_generics"] }
+color-eyre = "0.6.2"
+eyre = "0.6.8"
+hashbrown = { version = "0.13.2", features = ["serde"] }
+once_cell = "1.17.0"
+parking_lot = "0.12.1"
+ron = "0.8.0"
+serde = { version = "1.0.152", features = ["derive"] }
+target-lexicon = "0.12.6"
+tracing = "0.1.37"
+tracing-appender = "0.2.2"
+tracing-error = "0.2.0"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
