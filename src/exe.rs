@@ -1,7 +1,10 @@
-//! Inner. Re-exported in `mod.rs`.
+//! Module for analyzing and patching `SpaceEngine.exe`
 
-use super::headers::NtImage;
-use crate::exe::headers::HEADERS;
+pub mod directory;
+pub mod headers;
+
+use self::headers::NtImage;
+use self::headers::HEADERS;
 use bytemuck::Pod;
 use eyre::Report;
 use eyre::Result;
