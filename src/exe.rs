@@ -157,7 +157,7 @@ impl Exe {
 
     /// Get the bytes in `range`.
     #[inline]
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(R = any::type_name::<R>()))]
     pub fn read_many<R>(&self, range: R) -> Result<Vec<u8>>
     where
         R: fmt::Debug + SliceIndex<[u8], Output = [u8]>,

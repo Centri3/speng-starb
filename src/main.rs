@@ -14,7 +14,7 @@ mod once;
 
 use crate::exe::EXE;
 use color_eyre::config::HookBuilder;
-use exe::headers::NtImage;
+// use exe::headers::NtImage;
 use eyre::Result;
 use eyre::WrapErr;
 use std::env;

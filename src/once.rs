@@ -1,6 +1,5 @@
 //! Wrapper around `OnceCell<T>` to provide implementations for `Serialize` and
-//! `Deserialize`, as long as `T` implements `Serialize`. Also adds some extra
-//! logging.
+//! `Deserialize`, as long as `T` implements `Serialize`.
 
 // We don't care if a function's unused
 #![allow(dead_code)]
@@ -10,6 +9,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use std::fmt;
 
 /// A thread-safe cell which can be written to only once.
 ///
@@ -41,17 +41,17 @@ use serde::Serializer;
 /// ```
 #[derive(Debug, Default)]
 #[repr(transparent)]
-pub struct OnceCell<T: Serialize>(Imp<T>);
+pub struct OnceCell<T: fmt::Debug + Serialize>(Imp<T>);
 
-impl<T: Serialize> OnceCell<T> {
+impl<T: fmt::Debug + Serialize> OnceCell<T> {
     /// Creates a new empty cell.
-    #[inline]
+    #[inline(always)]
     pub const fn new() -> Self {
         Self(Imp::new())
     }
 
     /// Creates a new initialized cell.
-    #[inline]
+    #[inline(always)]
     pub const fn with_value(value: T) -> Self {
         Self(Imp::with_value(value))
     }
@@ -88,6 +88,7 @@ impl<T: Serialize> OnceCell<T> {
     /// cell.set(92).unwrap();
     /// cell = OnceCell::new();
     /// ```
+    #[inline]
     pub fn get_mut(&mut self) -> Option<&mut T> {
         self.0.get_mut()
     }
@@ -259,13 +260,21 @@ impl<T: Serialize> OnceCell<T> {
     }
 }
 
-impl<T: Serialize> Serialize for OnceCell<T> {
+impl<T> Serialize for OnceCell<T>
+where
+    T: fmt::Debug + Serialize,
+{
+    #[inline]
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
         self.0.get().unwrap().serialize(ser)
     }
 }
 
-impl<'de, T: Deserialize<'de> + Serialize> Deserialize<'de> for OnceCell<T> {
+impl<'de, T> Deserialize<'de> for OnceCell<T>
+where
+    T: Deserialize<'de> + fmt::Debug + Serialize,
+{
+    #[inline]
     fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
         Ok(Self(Imp::with_value(T::deserialize(de)?)))
     }

@@ -6,6 +6,7 @@ use eyre::Result;
 use hashbrown::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
+use std::any;
 use std::fmt;
 use std::ops::Range;
 
@@ -22,14 +23,13 @@ pub struct NtImage {
     sections: OnceCell<NtImageSections>,
 }
 
-#[allow(dead_code)]
 impl NtImage {
     /// Signature (or e_magic) of DOS headers
-    const MZ_SIGNATURE: usize = 0x0usize;
+    const MZ_MAGIC: usize = 0x0usize;
     /// Expected value of `MZ_SIGNATURE`
-    const MZ_SIGNATURE_VALUE: &str = "MZ";
+    const MZ_MAGIC_VALUE: &str = "MZ";
     /// Length of the signature
-    const MZ_SIGNATURE_LEN: usize = 0x2usize;
+    const MZ_MAGIC_LEN: usize = 0x2usize;
     /// Address of `IMAGE_NT_HEADERS`
     const MZ_NT_ADDRESS: usize = 0x3cusize;
     /// Signature of NT headers. Offset from `MZ_NT_ADDRESS`
@@ -48,7 +48,9 @@ impl NtImage {
     const NT_FILE_SECTIONS_NUM: usize = 0x2usize;
     /// Size of the optional header in `EXE`. Offset from `MZ_NT_ADDRESS` and
     /// `NT_FILE`
-    const NT_FILE_OPTIONAL_LEN: usize = 0x12usize;
+    const NT_FILE_OPTIONAL_LEN: usize = 0x10usize;
+    /// Expected value of `NT_FILE_OPTIONAL_LEN`
+    const NT_FILE_OPTIONAL_LEN_VALUE: usize = 0xf0usize;
     /// Address where the `IMAGE_OPTIONAL_HEADER` starts. Offset from
     /// `MZ_NT_ADDRESS`
     const NT_OPTIONAL: usize = 0x18usize;
@@ -71,17 +73,17 @@ impl NtImage {
     const NT_OPTIONAL_DIRECTORY_ENTRY_LEN: usize = 0x8usize;
     /// Address where the `IMAGE_DATA_DIRECTORY` begins. Offset from
     /// `MZ_NT_ADDRESS` and `NT_OPTIONAL`
-    const NT_OPTIONAL_DIRECTORY: usize = 0x88usize;
+    const NT_OPTIONAL_DIRECTORY: usize = 0x70usize;
     /// Length of each section
     const NT_SECTION_LEN: usize = 0x28usize;
-    /// Name of the section. Offset from `MZ_NT_ADDRESS`, `NT_FILE`,
-    /// `NT_FILE_LEN` and `NT_FILE_OPTIONAL_LEN`
+    /// Name of the section. Offset from `MZ_NT_ADDRESS`, `NT_OPTIONAL` and
+    /// `NT_FILE_OPTIONAL_LEN`
     const NT_SECTION_NAME: usize = 0x0usize;
-    /// Size of the section. Offset from `MZ_NT_ADDRESS`, `NT_FILE`,
-    /// `NT_FILE_LEN` and `NT_FILE_OPTIONAL_LEN`
+    /// Size of the section. Offset from `MZ_NT_ADDRESS`, `NT_OPTIONAL` and
+    /// `NT_FILE_OPTIONAL_LEN`
     const NT_SECTION_SIZE: usize = 0x10usize;
-    /// Start of the section. Offset from `MZ_NT_ADDRESS`, `NT_FILE`,
-    /// `NT_FILE_LEN` and `NT_FILE_OPTIONAL_LEN`
+    /// Start of the section. Offset from `MZ_NT_ADDRESS`, `NT_OPTIONAL` and
+    /// `NT_FILE_OPTIONAL_LEN`
     const NT_SECTION: usize = 0x14usize;
 
     /// Internal function to define `HEADERS`.
@@ -95,6 +97,12 @@ impl NtImage {
 
     #[inline(always)]
     #[instrument(level = "trace")]
+    fn __read_u16_to_usize(index: usize) -> Result<usize> {
+        Ok(EXE.read_to::<u16>(index)? as usize)
+    }
+
+    #[inline(always)]
+    #[instrument(level = "trace")]
     fn __read_u32_to_usize(index: usize) -> Result<usize> {
         Ok(EXE.read_to::<u32>(index)? as usize)
     }
@@ -102,7 +110,7 @@ impl NtImage {
     /// Internal function to reduce code repetition. Allows getting any of
     /// `HEADERS`' fields which are wrapped in `OnceCell<T>`.
     #[inline(always)]
-    #[instrument(skip(value), level = "trace")]
+    #[instrument(skip(value), level = "trace", fields(T = any::type_name::<T>()))]
     fn __get_initialized<T: fmt::Debug + Serialize>(value: &OnceCell<T>) -> Result<&T> {
         value
             .get()
@@ -114,28 +122,63 @@ impl NtImage {
     pub fn init(&self) -> Result<()> {
         info!("Initializing `HEADERS`");
 
-        let nt_base = EXE.read_to::<u32>(Self::MZ_NT_ADDRESS)? as usize;
+        // Base of `IMAGE_NT_HEADERS`
+        let nt_base = Self::__read_u32_to_usize(Self::MZ_NT_ADDRESS)?;
+        // Base of `IMAGE_FILE_HEADER`
+        let nt_file = nt_base + Self::NT_FILE;
+        // Base of `IMAGE_OPTIONAL_HEADER`
+        let nt_optional = nt_base + Self::NT_OPTIONAL;
+        // Base of `IMAGE_DATA_DIRECTORY` in `IMAGE_OPTIONAL_HEADER`
+        let nt_directory = nt_optional + Self::NT_OPTIONAL_DIRECTORY;
 
         // Read DOS e_magic and NT signature
-        let mz = EXE.read_to_string(Self::MZ_SIGNATURE, Some(2usize))?;
-        let pe = EXE.read_to_string(nt_base, Some(4usize))?;
+        let mz = EXE.read_to_string(Self::MZ_MAGIC, Some(Self::MZ_MAGIC_LEN))?;
+        let pe = EXE.read_to_string(nt_base, Some(Self::NT_SIGNATURE_LEN))?;
 
-        // Verify both DOS and NT headers exist. This is actually quite nice.
-        (mz == "MZ" && pe == "PE").then_some(()).ok_or_else(|| {
-            eyre!("`EXE` does not have valid header signatures: mz = {mz}, pe = {pe}")
-        })?;
+        // Verify both DOS and NT headers exist. Will fail if either are invalid
+        (mz == Self::MZ_MAGIC_VALUE && pe == Self::NT_SIGNATURE_VALUE)
+            .then_some(())
+            .ok_or_else(|| {
+                eyre!("`EXE` does not have valid header signatures: mz = {mz}, pe = {pe}")
+            })?;
 
-        self.__init_sections(nt_base)?;
+        self.__init_optional(nt_optional)?;
+
+        // Base of `IMAGE_SECTION_HEADER`
+        let nt_sections =
+            nt_optional + Self::__read_u16_to_usize(nt_file + Self::NT_FILE_OPTIONAL_LEN)?;
+
+        self.__init_sections(nt_sections)?;
 
         todo!();
     }
 
     #[inline]
-    #[instrument(skip(self))]
-    fn __init_sections(&self, nt_base: usize) -> Result<()> {
-        let num_sections = EXE.read_to::<u16>(1)? as usize;
+    #[instrument(skip(self), level = "trace")]
+    fn __init_optional(&self, nt_optional: usize) -> Result<()> {
+        let entry_point = nt_optional + Self::__read_u32_to_usize(Self::NT_OPTIONAL_ENTRY_POINT)?;
+        let directory = self.__get_directory(nt_optional)?;
+
+        self.optional
+            .set(NtOptional::new(entry_point, directory))
+            .map_err(|_| eyre!("`HEADERS` was already initialized"))?;
+
+        trace!("Initialized `HEADERS.optional`");
 
         Ok(())
+    }
+
+    #[inline]
+    #[instrument(skip(self), level = "trace")]
+    fn __get_directory(&self, nt_optional: usize) -> Result<()> {
+        // TODO:
+        Ok(())
+    }
+
+    #[inline]
+    #[instrument(skip(self), level = "trace")]
+    fn __init_sections(&self, nt_sections: usize) -> Result<()> {
+        todo!();
     }
 
     #[inline]
