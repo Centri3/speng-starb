@@ -26,7 +26,7 @@ use std::slice::SliceIndex;
 pub static EXE: Exe = Exe::__define();
 
 /// Abstraction over iterating a `Vec<u8>`. Should only be initialized once.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct Exe {
     inner: OnceCell<RwLock<Vec<u8>>>,
@@ -94,6 +94,8 @@ impl Exe {
         self.inner
             .set(RwLock::new(inner))
             .map_err(|_| eyre!("`EXE` was already initialized"))?;
+
+        trace!("Initialized `EXE.inner`");
 
         // Implicitly initialize `HEADERS` if `EXE.init()` is called
         HEADERS.init()?;
@@ -172,7 +174,6 @@ impl Exe {
     #[inline]
     #[instrument(skip(self), fields(P = any::type_name::<P>()))]
     pub fn read_to<P: Pod>(&self, index: usize) -> Result<P> {
-        // TODO: This is kinda ugly now, ngl
         let range = index
             ..(index
                 .checked_add(mem::size_of::<P>())
@@ -184,6 +185,7 @@ impl Exe {
     /// Read bytes at `index` and cast to a String. Will read until `NULL` is
     /// found or it's read `size` number of bytes. Will return `Err` if it's out
     /// of bounds or invalid utf-8!
+    // FIXME: This should return an `AsciiString` or similar
     #[inline]
     #[instrument(skip(self))]
     pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {

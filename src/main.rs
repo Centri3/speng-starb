@@ -42,11 +42,11 @@ fn main() {
     EXE.init("SpaceEngine.exe").unwrap();
     EXE.read_to::<u32>(1000).unwrap();
 
-    let ser = ron::to_string(EXE.headers()).unwrap();
-    let de: NtImage = ron::from_str(&ser).unwrap();
+    // let ser = ron::to_string(EXE.headers()).unwrap();
+    // let de: NtImage = ron::from_str(&ser).unwrap();
 
-    info!("ser: {ser}");
-    info!("de: {de:#x?}");
+    // info!("ser: {ser}");
+    // info!("de: {de:#x?}");
 }
 
 /// Extracted from `main()`

@@ -1,5 +1,9 @@
-//! Wrapper around `OnceCell<T>` to provide Serialize and Deserialize
-//! implementations, as long as `T` implements `Serialize`
+//! Wrapper around `OnceCell<T>` to provide implementations for `Serialize` and
+//! `Deserialize`, as long as `T` implements `Serialize`. Also adds some extra
+//! logging.
+
+// We don't care if a function's unused
+#![allow(dead_code)]
 
 use once_cell::sync::OnceCell as Imp;
 use serde::Deserialize;
@@ -7,6 +11,34 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+/// A thread-safe cell which can be written to only once.
+///
+/// `OnceCell` provides `&` references to the contents without RAII guards.
+///
+/// Reading a non-`None` value out of `OnceCell` establishes a
+/// happens-before relationship with a corresponding write. For example, if
+/// thread A initializes the cell with `get_or_init(f)`, and thread B
+/// subsequently reads the result of this call, B also observes all the side
+/// effects of `f`.
+///
+/// # Example
+/// ```
+/// use once_cell::sync::OnceCell;
+///
+/// static CELL: OnceCell<String> = OnceCell::new();
+/// assert!(CELL.get().is_none());
+///
+/// std::thread::spawn(|| {
+///     let value: &String = CELL.get_or_init(|| {
+///         "Hello, World!".to_string()
+///     });
+///     assert_eq!(value, "Hello, World!");
+/// }).join().unwrap();
+///
+/// let value: Option<&String> = CELL.get();
+/// assert!(value.is_some());
+/// assert_eq!(value.unwrap().as_str(), "Hello, World!");
+/// ```
 #[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct OnceCell<T: Serialize>(Imp<T>);
