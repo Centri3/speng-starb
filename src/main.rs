@@ -10,11 +10,10 @@ extern crate eyre;
 extern crate tracing;
 
 mod exe;
-mod once;
+mod serde;
 
-use crate::exe::EXE;
 use color_eyre::config::HookBuilder;
-// use exe::headers::NtImage;
+use exe::EXE;
 use eyre::Result;
 use eyre::WrapErr;
 use std::env;
@@ -41,12 +40,6 @@ fn main() {
 
     EXE.init("SpaceEngine.exe").unwrap();
     EXE.read_to::<u32>(1000).unwrap();
-
-    // let ser = ron::to_string(EXE.headers()).unwrap();
-    // let de: NtImage = ron::from_str(&ser).unwrap();
-
-    // info!("ser: {ser}");
-    // info!("de: {de:#x?}");
 }
 
 /// Extracted from `main()`
