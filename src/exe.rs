@@ -199,10 +199,15 @@ impl Exe {
     pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
         trace!("Reading string");
 
-        let bytes = match size {
-            Some(size) => self.__read_to_string_some(index, size),
-            None => self.__read_to_string_none(index),
-        }?;
+        // TODO: I'm not sure why clippy recommends this, should this be used here over match?
+        let bytes = size.map_or_else(
+            || self.__read_to_string_none(index),
+            |size| self.__read_to_string_some(index, size),
+        )?;
+
+        if !bytes.is_ascii() {
+            warn!("String is not ASCII! This may be intentional.");
+        }
 
         // We use CString here to return `Err` if it has `NULL`.
         Ok(CString::new(bytes.as_slice())?.to_str()?.to_string())
@@ -234,7 +239,7 @@ impl Exe {
     #[instrument(skip(self), level = "trace")]
     fn __read_to_string_none(&self, index: usize) -> Result<Vec<u8>> {
         // This is quite slow, as every call to `.read_many()` has to create a
-        // `Vec<u8>`. It's not a big loss, though, only ~3ms
+        // `Vec<u8>`. It's not a big loss, though, only ~3ms here
         Ok(self
             .read_many(index..)?
             .split(|&b| b == 0u8)
@@ -243,7 +248,7 @@ impl Exe {
             .to_vec())
     }
 
-    /// Write the byte in `value` to `index`. Returns the previous bytes, which
+    /// Write the byte in `value` to `index`. Returns the previous byte, which
     /// can be ignored.
     #[inline]
     #[instrument(skip(self))]

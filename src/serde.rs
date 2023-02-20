@@ -22,7 +22,7 @@ pub mod __once_cell {
 
         impl<T: Serialize + 'static> From<__OnceCell<T>> for OnceCell<T> {
             fn from(value: __OnceCell<T>) -> Self {
-                OnceCell::with_value(value.0)
+                Self::with_value(value.0)
             }
         }
     }
