@@ -1,9 +1,11 @@
 //! Module for analyzing `EXE`'s `IMAGE_NT_HEADERS`. Provides `HEADERS`.
 
 use crate::exe::EXE;
-use crate::once::OnceCell;
+use crate::once::deserialize;
+use crate::once::serialize;
 use eyre::Result;
 use hashbrown::HashMap;
+use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde::Serialize;
 use std::any;
@@ -19,7 +21,9 @@ pub static HEADERS: NtImage = NtImage::__define();
 #[derive(Debug, Deserialize, Serialize)]
 #[non_exhaustive]
 pub struct NtImage {
+    #[serde(serialize_with = "serialize", deserialize_with = "deserialize")]
     optional: OnceCell<NtOptional>,
+    #[serde(serialize_with = "serialize", deserialize_with = "deserialize")]
     sections: OnceCell<NtImageSections>,
 }
 
