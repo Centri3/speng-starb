@@ -11,6 +11,7 @@ extern crate tracing;
 
 mod exe;
 mod serde;
+mod utils;
 
 use color_eyre::config::HookBuilder;
 use exe::EXE;
@@ -40,6 +41,8 @@ fn main() {
 
     EXE.init("SpaceEngine.exe").unwrap();
     EXE.read_to::<u32>(1000).unwrap();
+
+    info!("{:?}", EXE.read_to_string(0x6837d0-0xc00, Some(0x14usize)).unwrap());
 }
 
 /// Extracted from `main()`

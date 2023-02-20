@@ -1,8 +1,8 @@
-use self::functions::Functions;
-use self::imports::Imports;
-
 pub mod functions;
 pub mod imports;
+
+use self::functions::Functions;
+use self::imports::Imports;
 
 /// Enum containing every entry of `NtDirectory`
 #[derive(Debug, Default)]

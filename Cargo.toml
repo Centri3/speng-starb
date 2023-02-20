@@ -20,6 +20,10 @@ opt-level = 2
 [profile.dev.package.backtrace]
 opt-level = 3
 
+[profile.release]
+codegen-units = 1
+lto = "fat"
+
 [dependencies]
 bytemuck = { version = "1.13.0", features = ["min_const_generics"] }
 color-eyre = "0.6.2"

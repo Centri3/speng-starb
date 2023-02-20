@@ -3,6 +3,8 @@
 pub mod directory;
 pub mod headers;
 
+use crate::utils::__report_unreachable;
+
 use self::headers::NtImage;
 use self::headers::HEADERS;
 use bytemuck::Pod;
@@ -14,6 +16,7 @@ use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::any;
 use std::env;
+use std::ffi::CString;
 use std::fmt;
 use std::fs;
 use std::fs::File;
@@ -98,7 +101,7 @@ impl Exe {
         trace!("Initialized `EXE.inner`");
 
         // Implicitly initialize `HEADERS` if `EXE.init()` is called
-        HEADERS.init()?;
+        // HEADERS.init()?;
 
         Ok(())
     }
@@ -174,6 +177,8 @@ impl Exe {
     #[inline]
     #[instrument(skip(self), fields(P = any::type_name::<P>()))]
     pub fn read_to<P: Pod>(&self, index: usize) -> Result<P> {
+        trace!("Reading to");
+
         let range = index
             ..(index
                 .checked_add(mem::size_of::<P>())
@@ -184,49 +189,58 @@ impl Exe {
 
     /// Read bytes at `index` and cast to a String. Will read until `NULL` is
     /// found or it's read `size` number of bytes. Will return `Err` if it's out
-    /// of bounds or invalid utf-8!
-    // FIXME: This should return an `AsciiString` or similar
+    /// of bounds or invalid UTF-8! Will also return `Err` if it has `NULL`
+    /// outside of trailing `NULL` bytes. Don't read UTF-16.
+    ///
+    /// You should only specify a size (`Some`) if its size is known, otherwise
+    /// you should use `None`.
     #[inline]
     #[instrument(skip(self))]
     pub fn read_to_string(&self, index: usize, size: Option<usize>) -> Result<String> {
-        let bytes = match size {
-            Some(size) => self.__read_to_string_some(index, size)?,
-            None => self.__read_to_string_none(index)?,
-        };
+        trace!("Reading string");
 
-        Ok(String::from_utf8(bytes)?.replace('\0', ""))
+        let bytes = match size {
+            Some(size) => self.__read_to_string_some(index, size),
+            None => self.__read_to_string_none(index),
+        }?;
+
+        // We use CString here to return `Err` if it has `NULL`.
+        Ok(CString::new(bytes.as_slice())?.to_str()?.to_string())
     }
 
     /// Extracted from `.read_to_string()`
     #[inline(always)]
     #[instrument(skip(self), level = "trace")]
     fn __read_to_string_some(&self, index: usize, size: usize) -> Result<Vec<u8>> {
-        self.read_many(
+        let bytes = self.read_many(
             index
                 ..index
                     .checked_add(size)
                     .ok_or_else(Self::__report_overflow)?,
-        )
+        )?;
+
+        // Number of `NULL` bytes at the end of `bytes`
+        let num_of_nulls = bytes
+            .rsplit(|&b| b != 0u8)
+            .next()
+            .ok_or_else(__report_unreachable)?
+            .len();
+
+        Ok(bytes[..bytes.len() - num_of_nulls].to_vec())
     }
 
     /// Extracted from `.read_to_string()`
-    // TODO: This is pretty ugly but I'm not sure if it can be done cleaner
     #[inline(always)]
     #[instrument(skip(self), level = "trace")]
     fn __read_to_string_none(&self, index: usize) -> Result<Vec<u8>> {
-        let mut bytes = vec![];
-
-        for i in index.. {
-            let byte = self.read(i)?;
-
-            if byte == 0u8 {
-                break;
-            }
-
-            bytes.push(byte);
-        }
-
-        Ok(bytes)
+        // This is quite slow, as every call to `.read_many()` has to create a
+        // `Vec<u8>`. It's not a big loss, though, only ~3ms
+        Ok(self
+            .read_many(index..)?
+            .split(|&b| b == 0u8)
+            .next()
+            .ok_or_else(__report_unreachable)?
+            .to_vec())
     }
 
     /// Write the byte in `value` to `index`. Returns the previous bytes, which

@@ -68,6 +68,9 @@ impl NtImage {
     /// Entry point of the program. Offset from `MZ_NT_ADDRESS` and
     /// `NT_OPTIONAL`
     const NT_OPTIONAL_ENTRY_POINT: usize = 0x28usize;
+    /// Image base of the program. Used for names of functions and the sort.
+    /// Offset from `MZ_NT_ADDRESS` and `NT_OPTIONAL`
+    const NT_OPTIONAL_IMAGE_BASE: usize = 0x30usize;
     /// Number of entries in `IMAGE_DATA_DIRECTORY`. Offset from `MZ_NT_ADDRESS`
     /// and `NT_OPTIONAL`
     const NT_OPTIONAL_DIRECTORY_ENTRY_NUM: usize = 0x84usize;
@@ -138,7 +141,7 @@ impl NtImage {
 
         // Read DOS e_magic and NT signature
         let mz = EXE.read_to_string(Self::MZ_MAGIC, Some(Self::MZ_MAGIC_LEN))?;
-        let pe = EXE.read_to_string(nt_base, Some(Self::NT_SIGNATURE_LEN))?;
+        let pe = EXE.read_to_string(nt_base + Self::NT_SIGNATURE, Some(Self::NT_SIGNATURE_LEN))?;
 
         // Verify both DOS and NT headers exist. Will fail if either are invalid
         (mz == Self::MZ_MAGIC_VALUE && pe == Self::NT_SIGNATURE_VALUE)
@@ -155,17 +158,18 @@ impl NtImage {
 
         self.__init_sections(nt_sections)?;
 
-        todo!();
+        Ok(())
     }
 
     #[inline]
     #[instrument(skip(self), level = "trace")]
     fn __init_optional(&self, nt_optional: usize) -> Result<()> {
         let entry_point = nt_optional + Self::__read_u32_to_usize(Self::NT_OPTIONAL_ENTRY_POINT)?;
+        let image_base = nt_optional + Self::__read_u32_to_usize(Self::NT_OPTIONAL_IMAGE_BASE)?;
         let directory = self.__get_directory(nt_optional)?;
 
         self.optional
-            .set(NtOptional::new(entry_point, directory))
+            .set(NtOptional::new(entry_point, image_base, directory))
             .map_err(|_| eyre!("`HEADERS` was already initialized"))?;
 
         trace!("Initialized `HEADERS.optional`");
@@ -183,7 +187,7 @@ impl NtImage {
     #[inline]
     #[instrument(skip(self), level = "trace")]
     fn __init_sections(&self, nt_sections: usize) -> Result<()> {
-        todo!();
+        Ok(())
     }
 
     #[inline]
@@ -203,14 +207,16 @@ impl NtImage {
 #[non_exhaustive]
 pub struct NtOptional {
     entry_point: usize,
+    image_base: usize,
     directory: (),
 }
 
 impl NtOptional {
     #[inline]
-    pub const fn new(entry_point: usize, directory: ()) -> Self {
+    pub const fn new(entry_point: usize, image_base: usize, directory: ()) -> Self {
         Self {
             entry_point,
+            image_base,
             directory,
         }
     }
@@ -219,6 +225,12 @@ impl NtOptional {
     #[instrument(skip(self))]
     pub fn entry_point(&self) -> usize {
         self.entry_point
+    }
+
+    #[inline]
+    #[instrument(skip(self))]
+    pub fn image_base(&self) -> usize {
+        self.image_base
     }
 
     #[inline]

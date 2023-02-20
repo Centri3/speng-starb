@@ -1,2 +1,4 @@
+pub type Imports = Vec<Import>;
+
 #[derive(Debug)]
-pub struct Imports {}
+pub struct Import {}
