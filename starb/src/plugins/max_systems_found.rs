@@ -1,4 +1,3 @@
-use crate::app::StarApp;
 use crate::plugin::Plugin;
 use crate::plugin::PluginPass;
 use crate::utils::base;
@@ -8,6 +7,7 @@ use crate::utils::write;
 use eframe::CreationContext;
 use eframe::Frame;
 use egui::Context;
+use egui::Ui;
 use eyre::Result;
 use std::fs;
 use tracing::info;
@@ -15,7 +15,7 @@ use tracing::instrument;
 use tracing::warn;
 
 #[derive(Clone)]
-pub struct MaxSystemsFound;
+pub struct MaxSystemsFound(u32);
 
 impl Plugin for MaxSystemsFound {
     #[instrument]
@@ -26,7 +26,6 @@ impl Plugin for MaxSystemsFound {
         let max_systems_found = fs::read_to_string(sys_folder()?.join("STARB_MAXSYSTEMSFOUND"))?
             .trim()
             .parse::<u32>()?;
-        info!(max_systems_found);
 
         let fir = (base() + 0x3F1531) as *mut u32;
         let sec = (base() + 0x3F1549) as *mut u32;
@@ -54,22 +53,22 @@ impl Plugin for MaxSystemsFound {
 
         info!("Changed max systems found to {max_systems_found}.");
 
-        Ok(Self)
+        Ok(Self(max_systems_found))
     }
 
     fn pass(&self) -> PluginPass {
         PluginPass::Early
     }
 
-    fn section(&self) -> Option<String> {
-        todo!()
+    fn name(&self) -> String {
+        "Custom max systems found".to_owned()
     }
 
     fn priority(&self) -> Option<usize> {
-        todo!()
+        Some(1usize)
     }
 
-    fn add_context(&self, app: &mut StarApp, ctx: &Context, frame: &mut Frame) {
-        todo!()
+    fn add_context(&self, ctx: &Context, frame: &mut Frame, ui: &mut Ui) {
+        ui.label(format!("Max systems found is currently {}", self.0));
     }
 }

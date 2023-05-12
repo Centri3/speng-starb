@@ -3,12 +3,12 @@ use once_cell::sync::OnceCell;
 use path_clean::PathClean;
 use region::protect_with_handle;
 use region::Protection;
-use windows_sys::Win32::System::ProcessStatus::EnumProcessModules;
-use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use std::env::current_exe;
 use std::mem::size_of;
 use std::path::PathBuf;
 use tracing::trace;
+use windows_sys::Win32::System::ProcessStatus::EnumProcessModules;
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 /// Base address of SE module
 ///

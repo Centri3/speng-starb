@@ -3,6 +3,7 @@ use eframe::CreationContext;
 use eframe::Frame;
 use eframe::Storage;
 use egui::Context;
+use egui::Ui;
 use eyre::Result;
 
 #[derive(Debug)]
@@ -21,13 +22,12 @@ pub trait Plugin {
     /// `Late` is after SE's main window has opened.
     fn pass(&self) -> PluginPass;
 
-    /// Name of this plugin, is used as the tab's name for custom plugins.
-    fn name(&self) -> Option<String> {
-        None
-    }
+    /// Name of this plugin, this is used as the section's name for custom
+    /// plugins.
+    fn name(&self) -> String;
 
     /// Tab to add this plugin to. Is noop for custom plugins, since they're
-    /// added to their own tab.
+    /// added to their own tab based on their name.
     fn section(&self) -> Option<String> {
         None
     }
@@ -40,9 +40,9 @@ pub trait Plugin {
 
     /// Same as `update`, but called when the app adds plugins to the GUI. Use
     /// this to add arguments and stuff.
-    fn add_plugin(&self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame) {}
+    fn add_plugin(&self, _ctx: &Context, _frame: &mut Frame, _ui: &mut Ui) {}
 
-    fn add_context(&self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame) {}
+    fn add_context(&self, _ctx: &Context, _frame: &mut Frame, _ui: &mut Ui) {}
 
     /// Called when [`StarApp`]'s `update` method is called.
     fn update(&self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame) {}

@@ -1,8 +1,8 @@
 #![feature(decl_macro)]
 
-pub mod app;
+mod app;
 pub mod plugin;
-pub mod plugins;
+mod plugins;
 pub mod utils;
 
 use app::StarApp;

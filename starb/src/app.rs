@@ -6,6 +6,7 @@ use eframe::Frame;
 use eframe::APP_KEY;
 use egui::CentralPanel;
 use egui::Context;
+use egui::TopBottomPanel;
 use serde::Deserialize;
 use serde::Serialize;
 use std::ptr::addr_of_mut;
@@ -26,10 +27,25 @@ use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
 use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 use windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible;
 
+type Plugins = Vec<Box<dyn Plugin>>;
+
+#[derive(Default)]
+pub enum Tab {
+    #[default]
+    StarbPlugins,
+    Filters,
+    Context,
+    CustomPlugins,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct StarApp {
     #[serde(skip)]
-    pub plugins: (Vec<Box<dyn Plugin>>, Vec<Box<dyn Plugin>>),
+    tab: Tab,
+    #[serde(skip)]
+    tab_internal: (bool, bool, bool, bool),
+    #[serde(skip)]
+    plugins: Plugins,
 }
 
 macro __plugins {
@@ -53,16 +69,14 @@ impl StarApp {
     pub fn new(cc: &CreationContext<'_>) -> Self {
         // TODO: Find and add custom early/late plugins.
 
-        let early_plugins = __plugins! {
+        let mut early_plugins = __plugins! {
             cc,
             MaxSystemsFound,
         };
 
         info!("Early plugins:");
 
-        for plugin in &early_plugins {
-            info!(plugin_name = plugin.name());
-        }
+        __print_plugins(&early_plugins);
 
         info!("Waiting for SE's main window to open...");
 
@@ -105,51 +119,129 @@ impl StarApp {
              user is using the wrong SE version. Build ID: {bid:?}",
         );
 
-        let late_plugins = __plugins! {};
+        let mut late_plugins = __plugins! {};
 
         info!("Late plugins:");
 
-        for plugin in &early_plugins {
-            info!(plugin_name = plugin.name());
-        }
+        __print_plugins(&late_plugins);
 
         // TODO: if_chain?
         if let Some(storage) = cc.storage {
             if let Some(app) = eframe::get_value::<Self>(storage, APP_KEY) {
-                return app
-                    .with_early_plugins(early_plugins)
-                    .with_late_plugins(late_plugins);
+                return app.with_plugins(late_plugins);
             }
         }
 
+        let mut plugins = vec![];
+        plugins.append(&mut early_plugins);
+        plugins.append(&mut late_plugins);
+
         Self {
-            plugins: (early_plugins, late_plugins),
+            tab: Tab::StarbPlugins,
+            // Spaghetti I think
+            tab_internal: (true, false, false, false),
+            plugins,
         }
     }
 
     #[must_use]
-    pub fn with_early_plugins(self, early_plugins: Vec<Box<dyn Plugin>>) -> Self {
-        Self {
-            plugins: (early_plugins, self.plugins.1),
-            ..self
-        }
-    }
-
-    #[must_use]
-    pub fn with_late_plugins(self, late_plugins: Vec<Box<dyn Plugin>>) -> Self {
-        Self {
-            plugins: (self.plugins.0, late_plugins),
-            ..self
-        }
+    pub fn with_plugins(self, plugins: Vec<Box<dyn Plugin>>) -> Self {
+        Self { plugins, ..self }
     }
 }
 
 impl App for StarApp {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
-        CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello World!");
+        ctx.set_pixels_per_point(1.5f32);
+
+        TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            ui.horizontal_centered(|ui| {
+                // Oops! All spaghetti!
+                //
+                // TODO: Let's like, not? This is stupid
+                if ui
+                    .toggle_value(&mut self.tab_internal.0, "Plugins")
+                    .clicked()
+                {
+                    // Spaghetti, but disallows disabling ALL tabs
+                    if !self.tab_internal.0 {
+                        self.tab_internal.0 = true;
+                    }
+
+                    self.tab = Tab::StarbPlugins;
+
+                    self.tab_internal.1 = false;
+                    self.tab_internal.2 = false;
+                    self.tab_internal.3 = false;
+                }
+                else if ui
+                    .toggle_value(&mut self.tab_internal.1, "Filters")
+                    .clicked()
+                {
+                    // Spaghetti, but disallows disabling ALL tabs
+                    if !self.tab_internal.1 {
+                        self.tab_internal.1 = true;
+                    }
+
+                    self.tab = Tab::Filters;
+
+                    self.tab_internal.0 = false;
+                    self.tab_internal.2 = false;
+                    self.tab_internal.3 = false;
+                }
+                else if ui
+                    .toggle_value(&mut self.tab_internal.2, "Context")
+                    .clicked()
+                {
+                    // Spaghetti, but disallows disabling ALL tabs
+                    if !self.tab_internal.2 {
+                        self.tab_internal.2 = true;
+                    }
+
+                    self.tab = Tab::Context;
+
+                    self.tab_internal.0 = false;
+                    self.tab_internal.1 = false;
+                    self.tab_internal.3 = false;
+                }
+                else if ui
+                    .toggle_value(&mut self.tab_internal.3, "Custom Plugins")
+                    .clicked()
+                {
+                    // Spaghetti, but disallows disabling ALL tabs
+                    if !self.tab_internal.3 {
+                        self.tab_internal.3 = true;
+                    }
+
+                    self.tab = Tab::CustomPlugins;
+
+                    self.tab_internal.0 = false;
+                    self.tab_internal.1 = false;
+                    self.tab_internal.2 = false;
+                }
+            })
         });
+
+        // Context tab
+        if matches!(self.tab, Tab::Context) {
+            CentralPanel::default().show(ctx, |ui| {
+                for plugin in &self.plugins {
+                    plugin.add_context(ctx, frame, ui);
+                }
+            });
+        }
+        // Custom (user-made) plugins tab
+        else if matches!(self.tab, Tab::CustomPlugins) {
+            CentralPanel::default().show(ctx, |ui| {
+                ui.vertical_centered_justified(|ui| {
+                    ui.label("Coming soon...");
+                })
+            });
+        }
     }
+
+    // TODO: Disallow exiting. Ok not really, the user CAN edit, but warn them that
+    // this may cause issues and tell them to use STARB_DONOTSTART instead.
 }
 
 unsafe extern "system" fn __check_if_window_is_opened(hwnd: isize, found: LPARAM) -> i32 {
@@ -191,4 +283,10 @@ fn __check_build_id() -> Option<i32> {
     unsafe { SteamAPI_Shutdown() };
 
     (!matches).then_some(build_id)
+}
+
+fn __print_plugins(plugins: &Vec<Box<dyn Plugin>>) {
+    for plugin in plugins {
+        info!(name = plugin.name());
+    }
 }
