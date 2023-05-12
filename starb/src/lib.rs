@@ -1,12 +1,14 @@
 pub mod app;
 pub mod plugin;
+pub mod plugins;
 
-use app::MyEguiApp;
+use app::StarApp;
 use color_eyre::config::HookBuilder;
 use eframe::NativeOptions;
 use std::env::current_exe;
 use std::fs::File;
 use std::panic::set_hook;
+use std::ptr::addr_of_mut;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -15,17 +17,24 @@ use steamworks_sys::SteamAPI_Init;
 use steamworks_sys::SteamAPI_RestartAppIfNecessary;
 use steamworks_sys::SteamAPI_Shutdown;
 use steamworks_sys::SteamAPI_SteamApps_v008;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
+use tracing::Level;
 use tracing_subscriber::fmt::format::FmtSpan;
-use windows_sys::w;
 use windows_sys::Win32::Foundation::HMODULE;
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::LPARAM;
 use windows_sys::Win32::System::SystemServices::DLL_PROCESS_ATTACH;
-use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
-use windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR;
-use windows_sys::Win32::UI::WindowsAndMessaging::MB_OK;
+use windows_sys::Win32::System::SystemServices::UNICODE_STRING_MAX_CHARS;
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+use windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameA;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongA;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+use windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible;
+use windows_sys::Win32::UI::WindowsAndMessaging::GWLP_ID;
 
 // WARNING: ACTUALLY OK CODE BELOW
 
@@ -59,6 +68,7 @@ unsafe fn __start_starb() {
             File::create(log).expect("This can't be seen. No point"),
         ))
         .with_span_events(FmtSpan::FULL)
+        .with_max_level(Level::DEBUG)
         .with_ansi(true)
         .init();
 
@@ -78,6 +88,34 @@ unsafe fn __start_starb() {
 
     info!("Hii!! uwu");
 
+    // This is necessary for some reason. DO. NOT. CHANGE. THIS. Basically, Steam
+    // API is FUCKED for SE. So, we wait until it stops using it to use it
+    // ourselves.
+    loop {
+        let mut found_se = false;
+
+        unsafe {
+            assert_ne!(
+                EnumWindows(
+                    Some(__check_if_window_is_opened),
+                    addr_of_mut!(found_se) as isize,
+                ),
+                0i32,
+                "EnumWindows failed"
+            );
+        };
+
+        if found_se {
+            trace!("Found SE window; We can begin!");
+            break;
+        }
+
+        trace!("Did not find SE window. Retrying in 100ms...");
+
+        // Don't use all of the CPU
+        thread::sleep(Duration::from_millis(100u64));
+    }
+
     let bid = __check_build_id();
 
     assert!(
@@ -90,16 +128,32 @@ unsafe fn __start_starb() {
     eframe::run_native(
         &format!("Star Browser Utilities v{}", env!("CARGO_PKG_VERSION")),
         NativeOptions::default(),
-        Box::new(|cc| Box::new(MyEguiApp::new(cc))),
+        Box::new(|cc| Box::new(StarApp::new(cc))),
     )
     .expect("Failed to start eframe");
 }
 
-fn __check_build_id() -> Option<i32> {
-    // This is necessary for some reason. DO. NOT. CHANGE. THIS.
-    trace!("Waiting a second to prevent bug");
-    thread::sleep(Duration::from_secs(1u64));
+unsafe extern "system" fn __check_if_window_is_opened(hwnd: isize, found: LPARAM) -> i32 {
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
 
+    if pid == unsafe { GetCurrentProcessId() } {
+        let mut name = [0u16; UNICODE_STRING_MAX_CHARS as usize];
+        let name_len = unsafe { GetClassNameW(hwnd, name.as_mut_ptr(), name.len() as i32) };
+        let name = String::from_utf16_lossy(&name[..name_len as usize]);
+
+        // Ignore splash screen. IsWindowVisible is necessary due to... Invisible
+        // windows??? IDK
+        if name != "SE Splash" && unsafe { IsWindowVisible(hwnd) } == 1i32 {
+            // SAFETY: We must uphold that this is the only reference to found. That's easy!
+            unsafe { (found as *mut bool).write(true) };
+        }
+    }
+
+    i32::from(true)
+}
+
+fn __check_build_id() -> Option<i32> {
     unsafe {
         assert!(!SteamAPI_RestartAppIfNecessary(314650u32), "Unreachable");
         assert!(SteamAPI_Init(), "SteamAPI_Init failed");
