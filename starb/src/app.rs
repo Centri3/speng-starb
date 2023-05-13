@@ -1,6 +1,7 @@
 use crate::plugin::Plugin;
 use crate::plugins::no_max_search_radius::NoMaxSearchRadius;
 use crate::plugins::no_max_systems_found::NoMaxSystemsFound;
+use crate::plugins::no_search_locking::NoSearchLocking;
 use crate::plugins::non_negative_search_radius::NonNegativeSearchRadius;
 use eframe::App;
 use eframe::CreationContext;
@@ -108,7 +109,8 @@ impl StarApp {
             cc,
             NoMaxSystemsFound,
             NoMaxSearchRadius,
-            NonNegativeSearchRadius,
+            NoSearchLocking,
+            // NonNegativeSearchRadius,
         };
 
         info!("Waiting for SE's main window to open...");
@@ -274,7 +276,7 @@ impl App for StarApp {
                         error!("User requested to crash the game. Goodbye!");
 
                         // Oops!
-                        abort();
+                        panic!("Oops! User requested to crash the game!");
                     }
                 })
             });
@@ -297,7 +299,9 @@ impl App for StarApp {
                 }
                 // Filters tab
                 else if matches!(self.tab, Tab::Filters) {
-                    todo!();
+                    ui.vertical_centered_justified(|ui| {
+                        ui.label("TODO. It is an open beta, you know?")
+                    });
                 }
                 // Context tab
                 else if matches!(self.tab, Tab::Context) {
@@ -361,6 +365,11 @@ impl App for StarApp {
             self.show_confirmation_dialog_disabled = false;
         }
         self.allowed_to_close
+    }
+
+    // Necessary since closing SE itself or on crashes will not save
+    fn auto_save_interval(&self) -> Duration {
+        Duration::from_secs(1u64)
     }
 }
 

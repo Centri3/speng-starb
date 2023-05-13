@@ -98,12 +98,12 @@ impl Plugin for NonNegativeSearchRadius {
         }
     }
 
-    fn add_context(&mut self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame, ui: &mut Ui) {
-        ui.label(format!(
-            "Max search radius is currently {}",
-            if self.0 { "100.0f64" } else { "UNLIMITED" }
-        ));
-    }
+    // fn add_context(&mut self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame, ui: &mut Ui) {
+    //     ui.label(format!(
+    //         "Max search radius is currently {}",
+    //         if self.0 { "100.0f64" } else { "UNLIMITED" }
+    //     ));
+    // }
 
     fn save(&mut self, _app: &mut StarApp, storage: &mut dyn Storage) {
         eframe::set_value(storage, PLUGIN_KEY, &self);
