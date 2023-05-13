@@ -19,7 +19,6 @@ use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
-use std::process::abort;
 use std::ptr::addr_of_mut;
 use std::sync::Arc;
 use std::thread;

@@ -32,8 +32,19 @@ impl Plugin for NoMaxSearchRadius {
         Self: Sized,
     {
         let no_max_search_radius =
-            eframe::get_value(cc.storage.expect("Probably unreachable?"), PLUGIN_KEY)
+            eframe::get_value::<Self>(cc.storage.expect("Probably unreachable?"), PLUGIN_KEY)
                 .unwrap_or_default();
+
+        // TODO: Don't do this here. Quick hotfix
+        unsafe {
+            if no_max_search_radius.0 {
+                write::<u8>(base().byte_offset(0x3EFBA0isize).cast(), 0xEBu8)
+            }
+            else {
+                write::<u8>(base().byte_offset(0x3EFBA0isize).cast(), 0x76u8)
+            }
+        }
+        .expect("Failed to update ):");
 
         Ok(no_max_search_radius)
     }

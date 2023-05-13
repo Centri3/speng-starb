@@ -32,8 +32,36 @@ impl Plugin for NoSearchLocking {
         Self: Sized,
     {
         let no_search_locking =
-            eframe::get_value(cc.storage.expect("Probably unreachable?"), PLUGIN_KEY)
+            eframe::get_value::<Self>(cc.storage.expect("Probably unreachable?"), PLUGIN_KEY)
                 .unwrap_or_default();
+
+        // TODO: Don't do this here. Quick hotfix
+        unsafe {
+            if no_search_locking.0 {
+                // Prevent flashing on GUI
+                write::<[u8; 3usize]>(base().byte_offset(0x3EC50Aisize).cast(), [
+                    0x8Bu8, 0xC2u8, 0x90u8,
+                ])?;
+                // nop 6, the actual fix
+                write::<[u8; 6usize]>(base().byte_offset(0x3EFB2Cisize).cast(), [
+                    0x66u8, 0x0Fu8, 0x1Fu8, 0x44u8, 0x00u8, 0x00u8,
+                ])?;
+                write::<[u8; 6usize]>(base().byte_offset(0x3EFD4Eisize).cast(), [
+                    0x66u8, 0x0Fu8, 0x1Fu8, 0x44u8, 0x00u8, 0x00u8,
+                ])?;
+            }
+            else {
+                write::<[u8; 3usize]>(base().byte_offset(0x3EC50Aisize).cast(), [
+                    0x0Fu8, 0x44u8, 0xC2u8,
+                ])?;
+                write::<[u8; 6usize]>(base().byte_offset(0x3EFB2Cisize).cast(), [
+                    0x0Fu8, 0x85u8, 0x82u8, 0x00u8, 0x00u8, 0x00u8,
+                ])?;
+                write::<[u8; 6usize]>(base().byte_offset(0x3EFD4Eisize).cast(), [
+                    0x0Fu8, 0x85u8, 0xBAu8, 0x01u8, 0x00u8, 0x00u8,
+                ])?;
+            }
+        }
 
         Ok(no_search_locking)
     }

@@ -44,7 +44,7 @@ impl Plugin for NoMaxSystemsFound {
         }
 
         let fir = unsafe { base().byte_offset(0x3F1531isize).cast::<u32>() };
-        let sec = unsafe { base().byte_offset(0x3F1531isize).cast::<u32>() };
+        let sec = unsafe { base().byte_offset(0x3F1549isize).cast::<u32>() };
 
         unsafe {
             assert_eq!(
