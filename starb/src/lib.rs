@@ -1,6 +1,8 @@
 #![feature(decl_macro)]
+#![feature(pointer_byte_offsets)]
+#![feature(vec_into_raw_parts)]
 
-mod app;
+pub mod app;
 pub mod plugin;
 mod plugins;
 pub mod utils;
@@ -13,10 +15,10 @@ use std::fs::File;
 use std::panic::set_hook;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use tracing::error;
 use tracing::info;
 use tracing::Level;
-use tracing_subscriber::fmt::format::FmtSpan;
 use windows_sys::Win32::Foundation::HMODULE;
 use windows_sys::Win32::System::SystemServices::DLL_PROCESS_ATTACH;
 
@@ -50,7 +52,6 @@ unsafe fn __start_starb() {
         .with_writer(Arc::new(
             File::create(log).expect("This can't be seen. No point"),
         ))
-        .with_span_events(FmtSpan::FULL)
         .with_max_level(Level::DEBUG)
         .with_ansi(true)
         .init();
@@ -70,6 +71,9 @@ unsafe fn __start_starb() {
     }));
 
     info!("Hii!! uwu");
+
+    // FIXME: Not sure why this fixes SE getting stuck at "Initializing OpenGL"
+    thread::sleep(Duration::from_secs(1u64));
 
     eframe::run_native(
         &format!("Star Browser Utilities v{}", env!("CARGO_PKG_VERSION")),

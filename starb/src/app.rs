@@ -1,15 +1,26 @@
 use crate::plugin::Plugin;
-use crate::plugins::max_systems_found::MaxSystemsFound;
+use crate::plugins::no_max_search_radius::NoMaxSearchRadius;
+use crate::plugins::no_max_systems_found::NoMaxSystemsFound;
+use crate::plugins::non_negative_search_radius::NonNegativeSearchRadius;
 use eframe::App;
 use eframe::CreationContext;
 use eframe::Frame;
+use eframe::Storage;
 use eframe::APP_KEY;
 use egui::CentralPanel;
+use egui::Color32;
 use egui::Context;
+use egui::RichText;
+use egui::ScrollArea;
 use egui::TopBottomPanel;
+use hashbrown::HashSet;
+use once_cell::sync::OnceCell;
+use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::process::abort;
 use std::ptr::addr_of_mut;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use steamworks_sys::SteamAPI_ISteamApps_GetAppBuildId;
@@ -17,6 +28,7 @@ use steamworks_sys::SteamAPI_Init;
 use steamworks_sys::SteamAPI_RestartAppIfNecessary;
 use steamworks_sys::SteamAPI_Shutdown;
 use steamworks_sys::SteamAPI_SteamApps_v008;
+use tracing::error;
 use tracing::info;
 use tracing::trace;
 use windows_sys::Win32::Foundation::LPARAM;
@@ -27,7 +39,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::GetClassNameW;
 use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 use windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible;
 
-type Plugins = Vec<Box<dyn Plugin>>;
+static PLUGINS: OnceCell<Arc<Mutex<Plugins>>> = OnceCell::new();
+
+type PluginTy = Box<dyn Plugin + Send + Sync + 'static>;
+/// true = starb, false = custom
+type Plugins = Vec<(PluginTy, bool)>;
 
 #[derive(Default)]
 pub enum Tab {
@@ -45,18 +61,37 @@ pub struct StarApp {
     #[serde(skip)]
     tab_internal: (bool, bool, bool, bool),
     #[serde(skip)]
-    plugins: Plugins,
+    requires_restart: HashSet<(String, String)>,
+    #[serde(skip)]
+    allowed_to_close: bool,
+    #[serde(skip)]
+    show_confirmation_dialog: bool,
+    show_confirmation_dialog_disabled: bool,
+}
+
+impl Default for StarApp {
+    fn default() -> Self {
+        Self {
+            tab: Tab::StarbPlugins,
+            // Spaghetti I think
+            tab_internal: (true, false, false, false),
+            requires_restart: HashSet::new(),
+            allowed_to_close: false,
+            show_confirmation_dialog: false,
+            show_confirmation_dialog_disabled: false,
+        }
+    }
 }
 
 macro __plugins {
-    ($($cc:expr)?) => { Vec::<Box<dyn Plugin>>::new() },
+    ($($cc:expr)?) => { Plugins::new() },
     ($cc:expr, $($plugin:ident),* $(,)?) => {{
-        let mut plugins = Vec::<Box<dyn Plugin>>::new();
+        let mut plugins = Plugins::new();
 
         $(
-            plugins.push(Box::new(MaxSystemsFound::load($cc).unwrap_or_else(|e| {
+            plugins.push(((Box::new($plugin::load($cc).unwrap_or_else(|e| {
                 panic!("Failed to load `{}`: {e}", stringify!($plugin))
-            })));
+            }))), true));
         )*
 
         plugins
@@ -71,12 +106,10 @@ impl StarApp {
 
         let mut early_plugins = __plugins! {
             cc,
-            MaxSystemsFound,
+            NoMaxSystemsFound,
+            NoMaxSearchRadius,
+            NonNegativeSearchRadius,
         };
-
-        info!("Early plugins:");
-
-        __print_plugins(&early_plugins);
 
         info!("Waiting for SE's main window to open...");
 
@@ -121,32 +154,32 @@ impl StarApp {
 
         let mut late_plugins = __plugins! {};
 
+        info!("Early plugins:");
+
+        __print_plugins(&early_plugins);
+
         info!("Late plugins:");
 
         __print_plugins(&late_plugins);
 
-        // TODO: if_chain?
-        if let Some(storage) = cc.storage {
-            if let Some(app) = eframe::get_value::<Self>(storage, APP_KEY) {
-                return app.with_plugins(late_plugins);
-            }
-        }
-
-        let mut plugins = vec![];
+        let mut plugins = PLUGINS.get_or_init(|| Arc::new(Mutex::new(vec![]))).lock();
         plugins.append(&mut early_plugins);
         plugins.append(&mut late_plugins);
 
-        Self {
-            tab: Tab::StarbPlugins,
-            // Spaghetti I think
-            tab_internal: (true, false, false, false),
-            plugins,
+        // TODO: if_chain?
+        if let Some(storage) = cc.storage {
+            if let Some(app) = eframe::get_value::<Self>(storage, APP_KEY) {
+                return app;
+            }
         }
+
+        Self::default()
     }
 
-    #[must_use]
-    pub fn with_plugins(self, plugins: Vec<Box<dyn Plugin>>) -> Self {
-        Self { plugins, ..self }
+    /// Call this to prompt the user to restart soon. YOU CANNOT UNDO THIS.
+    pub fn requires_restart(&mut self, name: &impl ToString, reason: &impl ToString) {
+        self.requires_restart
+            .insert((name.to_string(), reason.to_string()));
     }
 }
 
@@ -222,26 +255,113 @@ impl App for StarApp {
             })
         });
 
-        // Context tab
-        if matches!(self.tab, Tab::Context) {
-            CentralPanel::default().show(ctx, |ui| {
-                for plugin in &self.plugins {
-                    plugin.add_context(ctx, frame, ui);
-                }
-            });
-        }
-        // Custom (user-made) plugins tab
-        else if matches!(self.tab, Tab::CustomPlugins) {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.vertical_centered_justified(|ui| {
-                    ui.label("Coming soon...");
+        if !self.requires_restart.is_empty() {
+            TopBottomPanel::bottom("requires_restart").show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(
+                        RichText::new(
+                            "A plugin(s) has requested that you restart your game. Please do so \
+                             as soon as possible. Hover over me for more information!",
+                        )
+                        .color(Color32::YELLOW),
+                    )
+                    .on_hover_text(format!("{:#?}", self.requires_restart));
+
+                    if ui
+                        .button(RichText::new("CRASH THE GAME.").color(Color32::RED))
+                        .clicked()
+                    {
+                        error!("User requested to crash the game. Goodbye!");
+
+                        // Oops!
+                        abort();
+                    }
                 })
             });
         }
+
+        CentralPanel::default().show(ctx, |ui| {
+            ScrollArea::vertical().show(ui, |ui| {
+                // Plugins tab
+                if matches!(self.tab, Tab::StarbPlugins) {
+                    for plugin in PLUGINS.get().expect("Unreachable").lock().iter_mut() {
+                        if plugin.1 {
+                            ui.heading(plugin.0.name());
+                            ui.separator();
+
+                            plugin.0.add_plugin(self, ctx, frame, ui);
+
+                            ui.separator();
+                        }
+                    }
+                }
+                // Filters tab
+                else if matches!(self.tab, Tab::Filters) {
+                    todo!();
+                }
+                // Context tab
+                else if matches!(self.tab, Tab::Context) {
+                    for plugin in PLUGINS.get().expect("Unreachable").lock().iter_mut() {
+                        plugin.0.add_context(self, ctx, frame, ui);
+                    }
+                }
+                // Custom (user-made) plugins tab
+                else if matches!(self.tab, Tab::CustomPlugins) {
+                    ui.vertical_centered_justified(|ui| {
+                        ui.label("Coming soon...")
+                            .on_hover_text("Ok, not really; but maybe one day!");
+                    });
+                }
+            });
+        });
+
+        // <https://github.com/emilk/egui/blob/master/examples/confirm_exit/src/main.rs>
+        // with minor edits
+        if self.show_confirmation_dialog {
+            egui::Window::new("Please confirm exit")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button("Exit")
+                            .on_hover_text(
+                                "Are you sure? Please don't go!\n..\nNah, I'm kidding. Closing \
+                                 may cause issues with some plugins, are you sure?",
+                            )
+                            .clicked()
+                        {
+                            self.allowed_to_close = true;
+                            frame.close();
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.show_confirmation_dialog = false;
+                        }
+                        // Seems this doesn't work lmao
+                        ui.checkbox(
+                            &mut self.show_confirmation_dialog_disabled,
+                            "Don't show again",
+                        );
+                    });
+                });
+        }
     }
 
-    // TODO: Disallow exiting. Ok not really, the user CAN edit, but warn them that
-    // this may cause issues and tell them to use STARB_DONOTSTART instead.
+    fn save(&mut self, storage: &mut dyn Storage) {
+        for plugin in PLUGINS.get().expect("Unreachable").lock().iter_mut() {
+            plugin.0.save(self, storage);
+        }
+    }
+
+    // <https://github.com/emilk/egui/blob/master/examples/confirm_exit/src/main.rs>
+    // with minor edits
+    fn on_close_event(&mut self) -> bool {
+        self.show_confirmation_dialog = true;
+        if !self.allowed_to_close {
+            self.show_confirmation_dialog_disabled = false;
+        }
+        self.allowed_to_close
+    }
 }
 
 unsafe extern "system" fn __check_if_window_is_opened(hwnd: isize, found: LPARAM) -> i32 {
@@ -285,8 +405,8 @@ fn __check_build_id() -> Option<i32> {
     (!matches).then_some(build_id)
 }
 
-fn __print_plugins(plugins: &Vec<Box<dyn Plugin>>) {
+fn __print_plugins(plugins: &Plugins) {
     for plugin in plugins {
-        info!(name = plugin.name());
+        info!(name = plugin.0.name());
     }
 }

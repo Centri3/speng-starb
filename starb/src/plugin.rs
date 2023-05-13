@@ -40,19 +40,29 @@ pub trait Plugin {
 
     /// Same as `update`, but called when the app adds plugins to the GUI. Use
     /// this to add arguments and stuff.
-    fn add_plugin(&self, _ctx: &Context, _frame: &mut Frame, _ui: &mut Ui) {}
+    fn add_plugin(&mut self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame, _ui: &mut Ui) {
+    }
 
-    fn add_context(&self, _ctx: &Context, _frame: &mut Frame, _ui: &mut Ui) {}
+    /// Same as `update`, but called when the app adds context in the context
+    /// tab. Use this to show the current state, I guess?
+    fn add_context(
+        &mut self,
+        _app: &mut StarApp,
+        _ctx: &Context,
+        _frame: &mut Frame,
+        _ui: &mut Ui,
+    ) {
+    }
 
     /// Called when [`StarApp`]'s `update` method is called.
-    fn update(&self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame) {}
+    fn update(&mut self, _app: &mut StarApp, _ctx: &Context, _frame: &mut Frame) {}
 
     /// Called when [`StarApp`]'s `save` method is called.
-    fn save(&self, _app: &mut StarApp, _storage: &mut dyn Storage) {}
+    fn save(&mut self, _app: &mut StarApp, _storage: &mut dyn Storage) {}
 
     /// Called when [`StarApp`]'s `on_close_event` method is called.
-    fn on_close_event(&self, _app: &mut StarApp) {}
+    fn on_close_event(&mut self, _app: &mut StarApp) {}
 
     /// Called when [`StarApp`]'s `on_exit` method is called.
-    fn on_exit(&self, _app: &mut StarApp) {}
+    fn on_exit(&mut self, _app: &mut StarApp) {}
 }

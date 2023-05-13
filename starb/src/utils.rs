@@ -18,7 +18,7 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 ///
 /// Panics if getting the base address of SE fails.
 #[must_use]
-pub fn base() -> usize {
+pub fn base() -> *mut () {
     static BASE: OnceCell<usize> = OnceCell::new();
 
     *BASE.get_or_init(|| {
@@ -39,7 +39,7 @@ pub fn base() -> usize {
         }
 
         base[0usize]
-    })
+    }) as *mut ()
 }
 
 /// Get SE's system folder.
