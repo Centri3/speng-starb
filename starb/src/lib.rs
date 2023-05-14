@@ -1,3 +1,4 @@
+#![feature(decl_macro)]
 #![feature(pointer_byte_offsets)]
 #![feature(vec_into_raw_parts)]
 
